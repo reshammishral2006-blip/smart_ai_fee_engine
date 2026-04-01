@@ -1,0 +1,71 @@
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Defaulters — Admin Panel</title>
+<link rel="stylesheet" href="../../shared/css/common.css">
+</head><body>
+<div class="sidebar">
+  <div class="sidebar-logo"><h2>🛡️ Admin Panel</h2><span>Smart Fee Engine</span></div>
+  <nav class="sidebar-nav">
+    <a class="nav-item" href="dashboard.html"><span class="nav-icon">📊</span> Dashboard</a>
+    <a class="nav-item" href="students.html"><span class="nav-icon">🎓</span> Students</a>
+    <a class="nav-item active" href="defaulters.html"><span class="nav-icon">⚠️</span> Defaulters</a>
+    <a class="nav-item" href="emi-approvals.html"><span class="nav-icon">📅</span> EMI Approvals</a>
+    <!--<a class="nav-item" href="reminders.html"><span class="nav-icon">🔔</span> Reminders</a>-->
+    <a class="nav-item" href="upload.html"><span class="nav-icon">📤</span> Upload Dataset</a>
+    <a class="nav-item" href="analytics.html"><span class="nav-icon">📈</span> Analytics</a>
+  </nav>
+  <div class="sidebar-bottom"><button class="nav-item" onclick="logout('admin')"><span class="nav-icon">🚪</span> Logout</button></div>
+</div>
+<div class="main-content">
+  <div class="topbar"><div class="topbar-title">⚠️ Defaulters List</div></div>
+  <div class="page-content">
+    <div class="alert alert-danger" style="margin-bottom:20px;">
+      ⚠️ Students listed below have pending fees past or near their due date. You can initiate a call reminder for each student.
+    </div>
+    <div class="card" style="padding:0;overflow:hidden;">
+      <div id="tableArea"><div class="loading" style="padding:40px;"><div class="spinner" style="margin:0 auto"></div></div></div>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+<script src="../../shared/js/utils.js"></script>
+<script>
+if(!localStorage.getItem('admin_user'))window.location.href='../../index.html';
+async function load(){
+  const data=await api('/admin/defaulters');
+  if(!data)return;
+  if(!data.length){document.getElementById('tableArea').innerHTML='<div style="text-align:center;padding:40px;color:#10b981;font-weight:600;">✅ No defaulters found!</div>';return;}
+  document.getElementById('tableArea').innerHTML=`
+    <table class="table">
+      <thead><tr><th>#</th><th>Student ID</th><th>Name</th><th>Department</th><th>Year</th><th>Email</th><th>Pending Fee</th><th>Due Date</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody>${data.map((s,i)=>`<tr>
+        <td>${i+1}</td><td><code>${s.student_id}</code></td><td><strong>${s.name}</strong></td>
+        <td>${s.department}</td><td>Yr ${s.year}</td>
+        <td style="font-size:13px">${s.email}</td>
+        <td style="color:#ef4444;font-weight:700">${fmt(s.pending_fee)}</td>
+        <td>${formatDate(s.due_date)}</td>
+        <td>${statusBadge(s.defaulter_status)}</td>
+        <td><button class="btn btn-sm btn-warning" onclick="callReminderPrompt('${s.student_id}')">📞 Call Reminder</button></td>
+      </tr>`).join('')}</tbody>
+    </table>`;
+}
+
+
+async function callReminderPrompt(student_id) {
+  const phone = prompt('Enter phone number to call for Student ID ' + student_id + ' (e.g. +911234567890):', '+91');
+  if (!phone) return;
+  const res = await fetch('http://localhost:5001/admin/send_call_reminder', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ to_phone: phone })
+  });
+  const data = await res.json();
+  if (data.status === 'sent') {
+    toast('Call reminder sent! SID: ' + data.sid, 'success');
+  } else {
+    toast('Failed to send call: ' + (data.msg || 'Unknown error'), 'danger');
+  }
+}
+load();
+</script>
+</body></html>

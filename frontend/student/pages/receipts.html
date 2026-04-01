@@ -1,0 +1,49 @@
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Receipts — Smart Fee Engine</title>
+<link rel="stylesheet" href="../../shared/css/common.css">
+</head><body>
+<div class="sidebar">
+  <div class="sidebar-logo"><h2>🎓 Smart Fee Engine</h2><span>Student Portal</span></div>
+  <nav class="sidebar-nav">
+    <a class="nav-item" href="dashboard.html"><span class="nav-icon">🏠</span> Dashboard</a>
+    <a class="nav-item" href="profile.html"><span class="nav-icon">👤</span> My Profile</a>
+    <a class="nav-item" href="payments.html"><span class="nav-icon">💳</span> Pay Fees</a>
+    <a class="nav-item" href="history.html"><span class="nav-icon">📋</span> Payment History</a>
+    <a class="nav-item" href="emi.html"><span class="nav-icon">📅</span> EMI Plan</a>
+    <a class="nav-item active" href="receipts.html"><span class="nav-icon">🧾</span> Receipts</a>
+  </nav>
+  <div class="sidebar-bottom"><button class="nav-item" onclick="logout()"><span class="nav-icon">🚪</span> Logout</button></div>
+</div>
+<div class="main-content">
+  <div class="topbar"><div class="topbar-title">🧾 Fee Receipts</div></div>
+  <div class="page-content">
+    <div class="card">
+      <div class="card-title">Your Receipts</div>
+      <div id="receiptList"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+<script src="../../shared/js/utils.js"></script>
+<script>
+const sid=localStorage.getItem('student_id');
+if(!sid)window.location.href='../../index.html';
+async function load(){
+  const data=await api(`/student/history?student_id=${sid}`);
+  if(!data||!data.length){document.getElementById('receiptList').innerHTML='<div style="text-align:center;padding:40px;color:#718096">No receipts available yet.</div>';return;}
+  document.getElementById('receiptList').innerHTML=`
+    <table class="table">
+      <thead><tr><th>Receipt No</th><th>Date</th><th>Amount</th><th>Method</th><th>Action</th></tr></thead>
+      <tbody>${data.map(p=>`<tr>
+        <td><code>${p.receipt_no}</code></td>
+        <td>${formatDate(p.payment_date)}</td>
+        <td><strong>${fmt(p.amount)}</strong></td>
+        <td>${p.method}</td>
+        <td><a href="http://localhost:5001/student/receipt/${p.receipt_no}" target="_blank" class="btn btn-sm btn-primary">🧾 Download</a></td>
+      </tr>`).join('')}
+      </tbody></table>`;
+}
+load();
+</script>
+</body></html>

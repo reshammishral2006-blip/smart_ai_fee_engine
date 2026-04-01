@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Student Dashboard — Smart Fee Engine</title>
+<link rel="stylesheet" href="../../shared/css/common.css">
+<style>
+.welcome-banner{background:linear-gradient(135deg,#1e3a5f,#2e5484);border-radius:16px;padding:28px;color:#fff;margin-bottom:24px;display:flex;justify-content:space-between;align-items:center;}
+.welcome-banner h2{font-size:22px;font-weight:800;}
+.welcome-banner p{opacity:0.8;font-size:14px;margin-top:4px;}
+.payment-progress{background:rgba(255,255,255,0.15);border-radius:8px;height:10px;margin-top:12px;overflow:hidden;}
+.payment-bar{height:100%;background:#f59e0b;border-radius:8px;transition:width 0.8s;}
+.due-badge{background:rgba(239,68,68,0.2);border:1px solid rgba(239,68,68,0.4);color:#fca5a5;border-radius:8px;padding:8px 14px;font-size:13px;}
+.chat-widget{position:fixed;bottom:24px;right:24px;z-index:500;}
+.chat-fab{width:56px;height:56px;background:#1e3a5f;border-radius:50%;border:none;cursor:pointer;font-size:24px;box-shadow:0 4px 20px rgba(0,0,0,0.2);transition:transform 0.2s;}
+.chat-fab:hover{transform:scale(1.1);}
+.chat-window{display:none;width:320px;height:420px;background:#fff;border-radius:16px;box-shadow:0 10px 40px rgba(0,0,0,0.2);flex-direction:column;margin-bottom:12px;}
+.chat-window.open{display:flex;}
+.chat-header{background:#1e3a5f;color:#fff;padding:16px;border-radius:16px 16px 0 0;display:flex;justify-content:space-between;align-items:center;}
+.chat-messages{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;}
+.msg{padding:10px 14px;border-radius:12px;font-size:13px;max-width:85%;}
+.msg.bot{background:#f0f4f8;color:#1a202c;align-self:flex-start;}
+.msg.user{background:#1e3a5f;color:#fff;align-self:flex-end;}
+.chat-input{display:flex;padding:12px;border-top:1px solid #e2e8f0;gap:8px;}
+.chat-input input{flex:1;padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;}
+.chat-input button{background:#1e3a5f;color:#fff;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-size:16px;}
+.quick-chips{display:flex;flex-wrap:wrap;gap:6px;padding:0 16px 10px;}
+.chip{background:#e2e8f0;color:#1e3a5f;border:none;border-radius:999px;padding:5px 12px;font-size:12px;cursor:pointer;font-weight:600;}
+.chip:hover{background:#1e3a5f;color:#fff;}
+</style>
+</head>
+<body>
+<div class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <h2>🎓 Smart Fee Engine</h2>
+    <span>Student Portal</span>
+  </div>
+  <nav class="sidebar-nav">
+    <a class="nav-item active" href="dashboard.html"><span class="nav-icon">🏠</span> Dashboard</a>
+    <a class="nav-item" href="profile.html"><span class="nav-icon">👤</span> My Profile</a>
+    <a class="nav-item" href="payments.html"><span class="nav-icon">💳</span> Pay Fees</a>
+    <a class="nav-item" href="history.html"><span class="nav-icon">📋</span> Payment History</a>
+    <a class="nav-item" href="emi.html"><span class="nav-icon">📅</span> EMI Plan</a>
+    <a class="nav-item" href="receipts.html"><span class="nav-icon">🧾</span> Receipts</a>
+  </nav>
+  <div class="sidebar-bottom">
+    <button class="nav-item" onclick="logout()"><span class="nav-icon">🚪</span> Logout</button>
+  </div>
+</div>
+
+<div class="main-content">
+  <div class="topbar">
+    <div class="topbar-title" id="pageTitle">Dashboard</div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div id="studentNameBadge" style="font-weight:600;color:#1e3a5f;"></div>
+      <div id="reminderBell" style="font-size:20px;cursor:pointer;" title="Reminders">🔔</div>
+    </div>
+  </div>
+  <div class="page-content">
+    <div class="welcome-banner" id="welcomeBanner">
+      <div>
+        <h2 id="welcomeMsg">Welcome back!</h2>
+        <p id="welcomeSub">Loading your fee status...</p>
+        <div style="margin-top:12px;font-size:13px;opacity:0.85;" id="progressLabel"></div>
+        <div class="payment-progress"><div class="payment-bar" id="paymentBar" style="width:0%"></div></div>
+      </div>
+      <div id="dueBadge"></div>
+    </div>
+
+    <div class="grid-4" id="statsGrid" style="margin-bottom:24px;"></div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">📋 Recent Payments</div>
+        <div id="recentPayments"><div style="text-align:center;padding:20px;color:#718096;">Loading...</div></div>
+      </div>
+      <div class="card">
+        <div class="card-title">📌 Fee Breakdown</div>
+        <canvas id="feeChart" height="220"></canvas>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:20px;">
+      <div class="card-title">⚡ Quick Actions</div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;">
+        <a href="payments.html" class="btn btn-primary">💳 Pay Now</a>
+        <a href="emi.html" class="btn btn-outline">📅 Apply for EMI</a>
+        <a href="history.html" class="btn btn-outline">📋 View History</a>
+        <a href="receipts.html" class="btn btn-outline">🧾 Download Receipt</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Chat Widget -->
+<div class="chat-widget">
+  <div class="chat-window" id="chatWindow">
+    <div class="chat-header">
+      <div><strong>🤖 Fee Assistant</strong><br><small style="opacity:0.7;">Ask about your fees</small></div>
+      <button onclick="toggleChat()" style="background:none;border:none;color:#fff;font-size:18px;cursor:pointer;">✕</button>
+    </div>
+    <div class="chat-messages" id="chatMessages">
+      <div class="msg bot">Hi! I'm your fee assistant. Ask me anything about your fees 😊</div>
+    </div>
+    <div class="quick-chips">
+      <button class="chip" onclick="sendQuick('My pending fees?')">Pending fees?</button>
+      <button class="chip" onclick="sendQuick('Last payment date?')">Last payment?</button>
+      <button class="chip" onclick="sendQuick('Next due date?')">Due date?</button>
+      <button class="chip" onclick="sendQuick('Total fees?')">Total fees?</button>
+    </div>
+    <div class="chat-input">
+      <input id="chatInput" placeholder="Type your question..." onkeyup="e=>e.key==='Enter'&&sendMsg()">
+      <button onclick="sendMsg()">➤</button>
+    </div>
+  </div>
+  <button class="chat-fab" onclick="toggleChat()">🤖</button>
+</div>
+<div id="toast"></div>
+<script src="../../shared/js/utils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script>
+const sid = localStorage.getItem('student_id');
+if(!sid) window.location.href='../../index.html';
+document.getElementById('studentNameBadge').textContent = localStorage.getItem('student_name')||'';
+
+async function loadDashboard() {
+  const d = await api(`/student/dashboard?student_id=${sid}`);
+  if(!d) return;
+  document.getElementById('welcomeMsg').textContent = `Hello, ${d.name.split(' ')[0]}! 👋`;
+  const pct = Math.round((d.paid_amount/d.total_fee)*100);
+  document.getElementById('welcomeSub').textContent = `${d.department} — Year ${d.year} | Status: ${d.fee_status}`;
+  document.getElementById('progressLabel').textContent = `${pct}% fees paid`;
+  document.getElementById('paymentBar').style.width = pct+'%';
+  const days = Math.ceil((new Date(d.due_date)-new Date())/(1000*86400));
+  if(days < 30 && d.pending_fee > 0)
+    document.getElementById('dueBadge').innerHTML = `<div class="due-badge">⏰ Due in ${days} days<br><small>${d.due_date}</small></div>`;
+
+  document.getElementById('statsGrid').innerHTML = `
+    <div class="stat-card"><div class="stat-icon blue">💰</div><div><div class="stat-value">${fmt(d.total_fee)}</div><div class="stat-label">Total Fees</div></div></div>
+    <div class="stat-card"><div class="stat-icon green">✅</div><div><div class="stat-value">${fmt(d.paid_amount)}</div><div class="stat-label">Paid Amount</div></div></div>
+    <div class="stat-card"><div class="stat-icon orange">⏳</div><div><div class="stat-value">${fmt(d.pending_fee)}</div><div class="stat-label">Pending Fee</div></div></div>
+    <div class="stat-card"><div class="stat-icon purple">🎁</div><div><div class="stat-value">${fmt(d.scholarship)}</div><div class="stat-label">Scholarship</div></div></div>
+  `;
+
+  new Chart(document.getElementById('feeChart'), {
+    type:'doughnut',
+    data:{labels:['Paid','Pending','Scholarship'],
+          datasets:[{data:[d.paid_amount,d.pending_fee,d.scholarship],
+                     backgroundColor:['#10b981','#ef4444','#3b82f6'],borderWidth:0}]},
+    options:{plugins:{legend:{position:'bottom'}},cutout:'65%'}
+  });
+}
+
+async function loadHistory() {
+  const hist = await api(`/student/history?student_id=${sid}`);
+  if(!hist) return;
+  const recent = hist.slice(0,5);
+  if(!recent.length){
+    document.getElementById('recentPayments').innerHTML='<div style="text-align:center;padding:20px;color:#718096;">No payments yet</div>';
+    return;
+  }
+  document.getElementById('recentPayments').innerHTML = `
+    <table class="table"><thead><tr><th>Date</th><th>Amount</th><th>Method</th><th>Status</th></tr></thead>
+    <tbody>${recent.map(p=>`<tr>
+      <td>${formatDate(p.payment_date)}</td>
+      <td><strong>${fmt(p.amount)}</strong></td>
+      <td>${p.method}</td>
+      <td>${statusBadge(p.status)}</td>
+    </tr>`).join('')}</tbody></table>`;
+}
+
+// Chat
+let chatOpen=false;
+function toggleChat(){chatOpen=!chatOpen;document.getElementById('chatWindow').classList.toggle('open',chatOpen);}
+function sendQuick(msg){document.getElementById('chatInput').value=msg;sendMsg();}
+async function sendMsg(){
+  const inp=document.getElementById('chatInput');
+  const msg=inp.value.trim(); if(!msg) return;
+  const msgs=document.getElementById('chatMessages');
+  msgs.innerHTML+=`<div class="msg user">${msg}</div>`;
+  inp.value=''; msgs.scrollTop=msgs.scrollHeight;
+  const res=await api('/chatbot',{method:'POST',body:JSON.stringify({student_id:sid,message:msg})});
+  if(res) msgs.innerHTML+=`<div class="msg bot">${res.reply}</div>`;
+  msgs.scrollTop=msgs.scrollHeight;
+}
+document.getElementById('chatInput').addEventListener('keyup',e=>{if(e.key==='Enter')sendMsg();});
+
+loadDashboard();
+loadHistory();
+</script>
+</body></html>

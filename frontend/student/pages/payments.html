@@ -1,0 +1,236 @@
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pay Fees — Smart Fee Engine</title>
+<link rel="stylesheet" href="../../shared/css/common.css">
+<style>
+.payment-card{max-width:520px;margin:0 auto;}
+.amount-display{background:linear-gradient(135deg,#1e3a5f,#2e5484);color:#fff;border-radius:16px;padding:28px;text-align:center;margin-bottom:24px;}
+.amount-display .pending{font-size:36px;font-weight:800;margin:8px 0;}
+.method-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;}
+.method-card{border:2px solid var(--border);border-radius:10px;padding:14px;cursor:pointer;text-align:center;transition:all 0.2s;}
+.method-card.selected{border-color:var(--primary);background:#f0f9ff;}
+.method-card .method-icon{font-size:24px;margin-bottom:6px;}
+.method-card .method-name{font-size:13px;font-weight:600;}
+.success-screen{display:none;text-align:center;padding:40px 20px;}
+.success-icon{font-size:64px;margin-bottom:16px;}
+.success-screen h3{font-size:22px;font-weight:800;color:#10b981;margin-bottom:8px;}
+</style>
+</head><body>
+<div class="sidebar">
+  <div class="sidebar-logo"><h2>🎓 Smart Fee Engine</h2><span>Student Portal</span></div>
+  <nav class="sidebar-nav">
+    <a class="nav-item" href="dashboard.html"><span class="nav-icon">🏠</span> Dashboard</a>
+    <a class="nav-item" href="profile.html"><span class="nav-icon">👤</span> My Profile</a>
+    <a class="nav-item active" href="payments.html"><span class="nav-icon">💳</span> Pay Fees</a>
+    <a class="nav-item" href="history.html"><span class="nav-icon">📋</span> Payment History</a>
+    <a class="nav-item" href="emi.html"><span class="nav-icon">📅</span> EMI Plan</a>
+    <a class="nav-item" href="receipts.html"><span class="nav-icon">🧾</span> Receipts</a>
+  </nav>
+  <div class="sidebar-bottom"><button class="nav-item" onclick="logout()"><span class="nav-icon">🚪</span> Logout</button></div>
+</div>
+<div class="main-content">
+  <div class="topbar"><div class="topbar-title">💳 Pay Fees</div></div>
+  <div class="page-content">
+    <div class="payment-card">
+      <div class="amount-display" id="amountDisplay">
+        <div style="font-size:14px;opacity:0.8;">Outstanding Balance</div>
+        <div class="pending" id="pendingAmt">Loading...</div>
+        <div style="font-size:13px;opacity:0.7;" id="dueInfo">Due Date: —</div>
+      </div>
+      <div class="card" id="paymentForm">
+        <div class="card-title">Select Payment Method</div>
+        <div class="method-grid">
+          <div class="method-card selected" onclick="selectMethod('UPI',this)"><div class="method-icon">📱</div><div class="method-name">UPI</div></div>
+          <div class="method-card" onclick="selectMethod('NetBanking',this)"><div class="method-icon">🏦</div><div class="method-name">Net Banking</div></div>
+          <div class="method-card" onclick="selectMethod('Card',this)"><div class="method-icon">💳</div><div class="method-name">Debit/Credit Card</div></div>
+          <div class="method-card" onclick="selectMethod('Wallet',this)"><div class="method-icon">👜</div><div class="method-name">Wallet</div></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Amount to Pay (₹)</label>
+          <input class="form-control" id="payAmount" type="number" placeholder="Enter amount">
+          <div style="display:flex;gap:8px;margin-top:8px;">
+            <button class="btn btn-sm btn-outline" onclick="setAmt('full')">Pay Full</button>
+            <button class="btn btn-sm btn-outline" onclick="setAmt('half')">Pay Half</button>
+            <button class="btn btn-sm btn-outline" onclick="setAmt('quarter')">Pay ¼</button>
+          </div>
+        </div>
+        <div id="upiField" class="form-group">
+          <label class="form-label">UPI ID</label>
+          <input class="form-control" id="upiId" placeholder="yourname@upi">
+        </div>
+        <div id="alertBox"></div>
+        <button class="btn btn-primary btn-block btn-lg" id="payBtn" onclick="processPayment()">🔒 Pay Securely</button>
+        <p style="text-align:center;font-size:12px;color:#718096;margin-top:10px;">🔐 Secured by Razorpay | 256-bit SSL</p>
+      </div>
+      <div class="card success-screen" id="successScreen">
+        <div class="success-icon">🎉</div>
+        <h3>Payment Successful!</h3>
+        <p id="successMsg" style="color:#718096;margin-bottom:20px;"></p>
+        <div id="txnDetails" style="background:#f8fafc;border-radius:8px;padding:16px;text-align:left;margin-bottom:20px;font-size:14px;"></div>
+        <div style="display:flex;gap:10px;justify-content:center;">
+          <button class="btn btn-primary" onclick="downloadReceipt()">🧾 Download Receipt</button>
+          <a href="dashboard.html" class="btn btn-outline">← Back to Dashboard</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script src="../../shared/js/utils.js"></script>
+<script>
+const sid = localStorage.getItem('student_id');
+if(!sid) window.location.href='../../index.html';
+let pending=0, selectedMethod='UPI', lastReceipt='';
+
+async function load() {
+  const d = await api(`/student/dashboard?student_id=${sid}`);
+  if(!d) return;
+  pending = d.pending_fee;
+  document.getElementById('pendingAmt').textContent = fmt(pending);
+  document.getElementById('dueInfo').textContent = `Due Date: ${d.due_date}`;
+  document.getElementById('payAmount').value = pending;
+  if(pending<=0) {
+    document.getElementById('paymentForm').innerHTML='<div class="alert alert-success" style="margin:0">✅ All fees are paid! No outstanding balance.</div>';
+  }
+}
+function selectMethod(m, el) {
+  selectedMethod=m;
+  document.querySelectorAll('.method-card').forEach(c=>c.classList.remove('selected'));
+  el.classList.add('selected');
+  document.getElementById('upiField').style.display = m==='UPI'?'block':'none';
+}
+function setAmt(type) {
+  const map={full:pending,half:pending/2,quarter:pending/4};
+  document.getElementById('payAmount').value=Math.round(map[type]);
+}
+async function processPayment() {
+  const amount = parseFloat(document.getElementById('payAmount').value);
+  const alertBox = document.getElementById('alertBox');
+  const btn = document.getElementById('payBtn');
+  // Validate amount
+  if (!amount || isNaN(amount) || amount <= 0) {
+    alertBox.innerHTML = '<div class="alert alert-danger">Enter a valid amount.</div>';
+    return;
+  }
+  if (amount > pending) {
+    alertBox.innerHTML = '<div class="alert alert-danger">Amount exceeds pending balance.</div>';
+    return;
+  }
+  btn.textContent = 'Processing...';
+  btn.disabled = true;
+  if (window.rzpOpen) return;
+  window.rzpOpen = true;
+
+  // Razorpay integration
+  try {
+    if (typeof Razorpay === 'undefined') {
+      alertBox.innerHTML = '<div class="alert alert-danger">Razorpay script not loaded. Please check your internet connection.</div>';
+      btn.textContent = '🔒 Pay Securely';
+      btn.disabled = false;
+      window.rzpOpen = false;
+      return;
+    }
+    const options = {
+      // Use test key for sandbox payments
+      key: 'rzp_test_SXrwND2LduYw2T',
+      amount: Math.round(amount * 100), // in paise
+      currency: 'INR',
+      name: 'Smart Fee Engine',
+      description: 'Fee Payment',
+      handler: async function (response) {
+        try {
+          const res = await api('/student/payment', {
+            method: 'POST',
+            body: JSON.stringify({
+              student_id: sid,
+              amount: amount,
+              method: selectedMethod,
+              razorpay_payment_id: response.razorpay_payment_id
+            })
+          });
+          btn.textContent = '🔒 Pay Securely';
+          btn.disabled = false;
+          if (!res || res.status !== 'success') {
+            alertBox.innerHTML = '<div class="alert alert-danger">Payment record failed. Try again.</div>';
+            return;
+          }
+          lastReceipt = res.receipt_no;
+          document.getElementById('paymentForm').style.display = 'none';
+          document.getElementById('successScreen').style.display = 'block';
+          document.getElementById('successMsg').textContent = `₹${amount.toLocaleString('en-IN')} paid successfully via Razorpay`;
+          document.getElementById('txnDetails').innerHTML = `
+            <b>Transaction ID:</b> ${res.txn_id}<br>
+            <b>Receipt No:</b> ${res.receipt_no}<br>
+            <b>New Balance:</b> ${fmt(res.pending)}<br>
+            <b>Status:</b> ${res.fee_status}`;
+          toast('Payment successful!', 'success');
+        } catch (err) {
+          alertBox.innerHTML = '<div class="alert alert-danger">Error recording payment. Please try again.</div>';
+        }
+      },
+      prefill: {
+        email: '',
+        contact: ''
+      },
+      theme: {
+        color: '#1e3a5f'
+      }
+    };
+    // Add modal overlay to block background
+    let overlay = document.createElement('div');
+    overlay.id = 'rzp-modal-overlay';
+    overlay.style.position = 'fixed';
+    overlay.style.top = 0;
+    overlay.style.left = 0;
+    overlay.style.width = '100vw';
+    overlay.style.height = '100vh';
+    overlay.style.background = 'rgba(0,0,0,0.25)';
+    overlay.style.zIndex = 9998;
+    document.body.appendChild(overlay);
+
+    const rzp = new Razorpay(options);
+    rzp.on('payment.failed', function (response) {
+      btn.textContent = '🔒 Pay Securely';
+      btn.disabled = false;
+      window.rzpOpen = false;
+      let errorMsg = 'Payment failed.';
+      if (response.error) {
+        errorMsg += '<br><b>Reason:</b> ' + (response.error.description || 'No description');
+        errorMsg += '<br><b>Code:</b> ' + (response.error.code || 'N/A');
+        errorMsg += '<br><b>Source:</b> ' + (response.error.source || 'N/A');
+        errorMsg += '<br><b>Step:</b> ' + (response.error.step || 'N/A');
+        errorMsg += '<br><b>Field:</b> ' + (response.error.field || 'N/A');
+      }
+      alertBox.innerHTML = '<div class="alert alert-danger">' + errorMsg + '</div>';
+      if (document.getElementById('rzp-modal-overlay')) document.body.removeChild(overlay);
+      // Also log error to console for debugging
+      console.error('Razorpay payment failed:', response);
+    });
+    rzp.on('payment.cancel', function () {
+      btn.textContent = '🔒 Pay Securely';
+      btn.disabled = false;
+      window.rzpOpen = false;
+      alertBox.innerHTML = '<div class="alert alert-warning">Payment cancelled by user.</div>';
+      if (document.getElementById('rzp-modal-overlay')) document.body.removeChild(overlay);
+    });
+    rzp.open();
+    // Remove overlay when payment window closes (after a short delay)
+    let checkClose = setInterval(() => {
+      if (!document.querySelector('.razorpay-container')) {
+        if (document.getElementById('rzp-modal-overlay')) document.body.removeChild(overlay);
+        window.rzpOpen = false;
+        clearInterval(checkClose);
+      }
+    }, 500);
+  } catch (e) {
+    alertBox.innerHTML = '<div class="alert alert-danger">Error launching Razorpay: ' + e.message + '</div>';
+    btn.textContent = '🔒 Pay Securely';
+    btn.disabled = false;
+    window.rzpOpen = false;
+  }
+}
+function downloadReceipt(){window.open(`http://localhost:5001/student/receipt/${lastReceipt}`,'_blank');}
+load();
+</script>
+</body></html>

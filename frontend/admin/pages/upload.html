@@ -1,0 +1,66 @@
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Upload Dataset — Admin Panel</title>
+<link rel="stylesheet" href="../../shared/css/common.css">
+<style>
+.drop-zone{border:3px dashed var(--border);border-radius:16px;padding:60px;text-align:center;cursor:pointer;transition:all 0.2s;background:#fafafa;}
+.drop-zone:hover,.drop-zone.dragover{border-color:var(--primary);background:#f0f4ff;}
+.drop-zone .icon{font-size:48px;margin-bottom:12px;}
+</style>
+</head><body>
+<div class="sidebar">
+  <div class="sidebar-logo"><h2>🛡️ Admin Panel</h2><span>Smart Fee Engine</span></div>
+  <nav class="sidebar-nav">
+    <a class="nav-item" href="dashboard.html"><span class="nav-icon">📊</span> Dashboard</a>
+    <a class="nav-item" href="students.html"><span class="nav-icon">🎓</span> Students</a>
+    <a class="nav-item" href="defaulters.html"><span class="nav-icon">⚠️</span> Defaulters</a>
+    <a class="nav-item" href="emi-approvals.html"><span class="nav-icon">📅</span> EMI Approvals</a>
+    <a class="nav-item" href="reminders.html"><span class="nav-icon">🔔</span> Reminders</a>
+    <a class="nav-item active" href="upload.html"><span class="nav-icon">📤</span> Upload Dataset</a>
+    <a class="nav-item" href="analytics.html"><span class="nav-icon">📈</span> Analytics</a>
+  </nav>
+  <div class="sidebar-bottom"><button class="nav-item" onclick="logout('admin')"><span class="nav-icon">🚪</span> Logout</button></div>
+</div>
+<div class="main-content">
+  <div class="topbar"><div class="topbar-title">📤 Upload Dataset</div></div>
+  <div class="page-content">
+    <div class="card" style="max-width:600px;margin:0 auto;">
+      <div class="card-title">Upload New Student Dataset</div>
+      <p style="color:#718096;font-size:14px;margin-bottom:20px;">Upload a new Excel (.xlsx) file. The system will automatically process, clean, and reload all student records.</p>
+      <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+        <div class="icon">📂</div>
+        <div style="font-size:16px;font-weight:700;color:#1e3a5f;margin-bottom:6px;">Drop your Excel file here</div>
+        <div style="color:#718096;font-size:14px;">or click to browse</div>
+        <div style="color:#94a3b8;font-size:12px;margin-top:8px;">Supports: .xlsx | Max size: 10MB</div>
+      </div>
+      <input type="file" id="fileInput" accept=".xlsx" style="display:none" onchange="handleFile(this.files[0])">
+      <div id="uploadStatus" style="margin-top:16px;"></div>
+      <div class="alert alert-info" style="margin-top:20px;">
+        <strong>📋 Required Excel Columns:</strong><br>
+        STUDENT ID, STUDENT NAME, DEPARTMENT, YEAR, TOTAL FEE, PAID AMOUNT, PENDING FEE, DUE DATE, SCHOLARSHIP AMOUNT, PARENT PHONE, EMAIL, INSTALLMENT PLAN, LAST PAYMENT DATE, FEE STATUS
+      </div>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+<script src="../../shared/js/utils.js"></script>
+<script>
+if(!localStorage.getItem('admin_user'))window.location.href='../../index.html';
+const dz=document.getElementById('dropZone');
+dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('dragover');});
+dz.addEventListener('dragleave',()=>dz.classList.remove('dragover'));
+dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('dragover');handleFile(e.dataTransfer.files[0]);});
+async function handleFile(file){
+  if(!file)return;
+  if(!file.name.endsWith('.xlsx')){toast('Only .xlsx files accepted','danger');return;}
+  document.getElementById('uploadStatus').innerHTML='<div class="alert alert-info">⏳ Uploading and processing...</div>';
+  const fd=new FormData();fd.append('file',file);
+  try{
+    const r=await fetch(API+'/admin/upload',{method:'POST',body:fd});
+    const d=await r.json();
+    document.getElementById('uploadStatus').innerHTML=`<div class="alert alert-success">✅ ${d.status}. Dataset reloaded successfully!</div>`;
+    toast('Dataset uploaded!','success');
+  }catch(e){document.getElementById('uploadStatus').innerHTML='<div class="alert alert-danger">Upload failed. Is the server running?</div>';}
+}
+</script>
+</body></html>

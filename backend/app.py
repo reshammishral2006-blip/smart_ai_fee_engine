@@ -4,7 +4,7 @@ import sqlite3, hashlib, uuid, os
 from datetime import datetime
 from io import BytesIO
 import sys
-from .twilio_reminder import send_call_reminder
+from twilio_reminder import send_call_reminder
 from flask import Response
 import requests
 

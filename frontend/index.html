@@ -55,7 +55,7 @@ body{display:flex;align-items:center;justify-content:center;min-height:100vh;bac
     <button class="btn btn-primary btn-block btn-lg" onclick="doLogin()" id="loginBtn">Sign In →</button>
     <div class="demo-info">
       <strong>🔐 Demo Credentials</strong>
-      Student: ID = <code>AIML001</code> | Password = <code>L001@Fee</code><br>
+      Student: ID = <code>AIML001</code> | Password = <code>0001@Fee</code><br>
       Admin: Username = <code>admin</code> | Password = <code>admin@123</code>
     </div>
     <button class="btn btn-warning btn-block" style="margin-top:18px" onclick="triggerCallReminder()">📞 Call Reminder (Demo)</button>
@@ -107,20 +107,21 @@ async function doLogin() {
   btn.disabled = true;
   
   try {
-    const res = await api('/login', {
-      method: 'POST', 
-      // Fix: 'username' keys use ki hai jo backend app.py expect kar raha hai
-      body: JSON.stringify({ 
-        role: currentRole, 
-        username: uid, 
-        password: pwd 
+    const response = await fetch('/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        role: currentRole,
+        username: uid,
+        password: pwd
       })
     });
+    const res = await response.json();
     
     btn.textContent = 'Sign In →'; 
     btn.disabled = false;
     
-    if (!res || res.status === 'error') {
+    if (!response.ok || !res || res.status === 'error') {
       alertBox.innerHTML = `<div class="alert alert-danger">${res?.msg || res?.message || 'Login failed. Check credentials.'}</div>`;
       return;
     }

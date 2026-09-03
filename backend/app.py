@@ -2,6 +2,7 @@ import os
 import sys
 import uuid
 import hashlib
+import hmac
 import sqlite3
 from io import BytesIO
 from datetime import datetime
@@ -100,36 +101,44 @@ def send_email_reminder(to_email, subject, content):
 @app.route('/login', methods=['POST'])
 def login():
     try:
-        data = request.json or {}
-        username = str(data.get('username', '')).strip().upper()
+        data = request.get_json(silent=True) or {}
+        username = str(data.get('username', data.get('email', ''))).strip()
         password = str(data.get('password', '')).strip()
-        role = data.get('role', 'student')
+        role = str(data.get('role', 'student')).strip().lower()
 
         # 1. Admin Login Check
         if role == 'admin':
-            if username == 'ADMIN' and password == 'admin@123':
-                return jsonify({"status": "success", "role": "admin", "username": "admin"})
+            conn = db()
+            admin = conn.execute(
+                "SELECT username, password_hash FROM admins WHERE LOWER(username)=LOWER(?)",
+                (username,)
+            ).fetchone()
+            conn.close()
+
+            if admin and hmac.compare_digest(hash_pw(password), admin['password_hash']):
+                return jsonify({"status": "success", "role": "admin", "username": admin['username']})
             return jsonify({"status": "error", "message": "Invalid Admin Credentials"}), 401
 
         # 2. Student Login Check
         elif role == 'student':
             conn = db()
             student = conn.execute(
-                "SELECT student_id, name, email FROM students WHERE UPPER(student_id)=?", 
-                (username,)
+                """SELECT student_id, name, email, password_hash
+                   FROM students
+                   WHERE UPPER(student_id)=UPPER(?) OR LOWER(email)=LOWER(?)""",
+                (username, username)
             ).fetchone()
             conn.close()
 
-            if student:
-                expected_default_pass = f"{username}@Fee"
-
-                if password and (password == expected_default_pass or password == "student123"):
-                    return jsonify({
-                        "status": "success",
-                        "role": "student",
-                        "student_id": student['student_id'],
-                        "name": student['name']
-                    })
+            if student and student['password_hash'] and hmac.compare_digest(
+                hash_pw(password), student['password_hash']
+            ):
+                return jsonify({
+                    "status": "success",
+                    "role": "student",
+                    "student_id": student['student_id'],
+                    "name": student['name']
+                })
 
             return jsonify({"status": "error", "message": "Invalid Student ID or Password"}), 401
 

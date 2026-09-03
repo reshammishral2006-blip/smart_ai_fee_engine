@@ -3,6 +3,7 @@ Smart Fee Collection Engine — Dataset Loader
 Reads the Excel dataset, cleans it, and seeds the SQLite database.
 """
 import sqlite3, pandas as pd, os, hashlib, uuid
+import re
 from datetime import datetime
 
 DB_PATH   = os.path.join(os.path.dirname(__file__), "fee_engine.db")
@@ -80,7 +81,9 @@ def load_excel_to_db():
         # Force update for Resham Mishra AIML024
         if sid == "AIML024":
             email = "resham.mishraaiml2023@indoreinstitute.com"
-        pwd = hash_password(sid[-4:] + "@Fee")
+        numeric_suffix = re.search(r"(\d+)$", sid)
+        password_suffix = numeric_suffix.group(1).zfill(4) if numeric_suffix else sid[-4:]
+        pwd = hash_password(password_suffix + "@Fee")
         c.execute("INSERT OR REPLACE INTO students (student_id,name,department,year,email,parent_phone,password_hash) VALUES (?,?,?,?,?,?,?)",
             (sid, row["STUDENT_NAME"], row["DEPARTMENT"], int(row["YEAR"]), email, str(row["PARENT_PHONE"]), pwd))
         c.execute("INSERT OR REPLACE INTO fee_structure (student_id,total_fee,paid_amount,pending_fee,scholarship,due_date,fee_status,defaulter_status) VALUES (?,?,?,?,?,?,?,?)",

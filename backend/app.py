@@ -97,30 +97,45 @@ def send_email_reminder(to_email, subject, content):
 
 
 # ── AUTHENTICATION ────────────────────────────────────────────────────
-@app.route('/login', methods=['POST','OPTIONS'])
+@app.route('/login', methods=['POST'])
 def login():
     data = request.json or {}
+    # Trim and handle case-sensitivity
+    username = str(data.get('username', '')).strip().upper()
+    password = str(data.get('password', '')).strip()
     role = data.get('role', 'student')
-    uid  = data.get('id','').strip()
-    pwd  = data.get('password','').strip()
-    conn = db()
-    
+
+    # 1. Admin Login Check
     if role == 'admin':
-        row = conn.execute("SELECT * FROM admins WHERE username=? AND password_hash=?",
-                           (uid, hash_pw(pwd))).fetchone()
-        conn.close()
-        if row: return jsonify({"status":"ok","role":"admin","username":uid})
-        return jsonify({"status":"error","msg":"Invalid credentials"}), 401
+        # Admin credentials (Case-insensitive for username)
+        if username == 'ADMIN' and password == 'admin@123':
+            return jsonify({"status": "success", "role": "admin"})
+        return jsonify({"status": "error", "message": "Invalid Admin Credentials"}), 401
+
+    # 2. Student Login Check
+    elif role == 'student':
+        # Load students data from DB / CSV
+        students = load_students()  # Apne app.py ke function ke according dekhein
         
-    row = conn.execute(
-        "SELECT s.*, f.* FROM students s JOIN fee_structure f ON s.student_id=f.student_id "
-        "WHERE (s.student_id=? OR s.email=?) AND s.password_hash=?",
-        (uid, uid.lower(), hash_pw(pwd))).fetchone()
-    conn.close()
-    if row: return jsonify({"status":"ok","role":"student","student_id":row["student_id"],"name":row["name"]})
-    return jsonify({"status":"error","msg":"Invalid credentials"}), 401
+        # Match Student ID (Upper case)
+        student = next((s for s in students if str(s.get('id', '')).upper() == username), None)
+        
+        if student:
+            # Check custom password from DB or fallback default password (e.g. AIML001@Fee)
+            expected_default_pass = f"{username}@Fee"
+            student_pass = str(student.get('password', ''))
 
+            if password == student_pass or password == expected_default_pass:
+                return jsonify({
+                    "status": "success",
+                    "role": "student",
+                    "student_id": student.get('id'),
+                    "name": student.get('name')
+                })
 
+        return jsonify({"status": "error", "message": "Invalid Student ID or Password"}), 401
+
+    return jsonify({"status": "error", "message": "Invalid Role"}), 400
 # ── STUDENT MODULE ────────────────────────────────────────────────────
 @app.route('/student/dashboard')
 def student_dashboard():

@@ -113,29 +113,54 @@ def login():
         return jsonify({"status": "error", "message": "Invalid Admin Credentials"}), 401
 
     # 2. Student Login Check
-    elif role == 'student':
-        # Load students data from DB / CSV
-        students = load_students()  # Apne app.py ke function ke according dekhein
-        
-        # Match Student ID (Upper case)
-        student = next((s for s in students if str(s.get('id', '')).upper() == username), None)
-        
-        if student:
-            # Check custom password from DB or fallback default password (e.g. AIML001@Fee)
-            expected_default_pass = f"{username}@Fee"
-            student_pass = str(student.get('password', ''))
+ @app.route('/login', methods=['POST'])
+def login():
+    try:
+        data = request.json or {}
+        username = str(data.get('username', '')).strip().upper()
+        password = str(data.get('password', '')).strip()
+        role = data.get('role', 'student')
 
-            if password == student_pass or password == expected_default_pass:
-                return jsonify({
-                    "status": "success",
-                    "role": "student",
-                    "student_id": student.get('id'),
-                    "name": student.get('name')
-                })
+        # 1. Admin Login
+        if role == 'admin':
+            if username == 'ADMIN' and password == 'admin@123':
+                return jsonify({"status": "success", "role": "admin", "username": "admin"})
+            return jsonify({"status": "error", "message": "Invalid Admin Credentials"}), 401
 
-        return jsonify({"status": "error", "message": "Invalid Student ID or Password"}), 401
+        # 2. Student Login
+        elif role == 'student':
+            # FIX: Use the existing function or helper in your app.py to get students
+            # If your app defines a helper like get_students() or a global list/dict, use that here:
+            if 'get_students' in globals():
+                students = get_students()
+            elif 'STUDENTS' in globals():
+                students = STUDENTS
+            else:
+                # Fallback: parse students directly from your local dataset if needed
+                students = []
 
-    return jsonify({"status": "error", "message": "Invalid Role"}), 400
+            # Search student list for matching ID (case-insensitive)
+            student = next((s for s in students if str(s.get('id', '')).upper() == username), None)
+
+            if student:
+                expected_default_pass = f"{username}@Fee"
+                student_pass = str(student.get('password', ''))
+
+                if password and (password == student_pass or password == expected_default_pass):
+                    return jsonify({
+                        "status": "success",
+                        "role": "student",
+                        "student_id": student.get('id', username),
+                        "name": student.get('name', 'Student')
+                    })
+
+            return jsonify({"status": "error", "message": "Invalid Student ID or Password"}), 401
+
+        return jsonify({"status": "error", "message": "Invalid Role"}), 400
+
+    except Exception as e:
+        print(f"Login error: {e}")
+        return jsonify({"status": "error", "message": "Internal Server Error"}), 500
 # ── STUDENT MODULE ────────────────────────────────────────────────────
 @app.route('/student/dashboard')
 def student_dashboard():

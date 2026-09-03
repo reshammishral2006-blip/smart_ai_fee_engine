@@ -1,94 +1,36 @@
-
-from flask import Flask, jsonify, request, send_file, make_response
-import sqlite3, hashlib, uuid, os
-from datetime import datetime
-from io import BytesIO
-import sys
-from twilio_reminder import send_call_reminder
-from flask import Response
-import requests
 import os
-from flask import Flask, render_template, send_from_directory
+import sys
+import uuid
+import hashlib
+import sqlite3
+from io import BytesIO
+from datetime import datetime
+import requests
 
+from flask import (
+    Flask, jsonify, request, send_file, 
+    make_response, Response, render_template, send_from_directory
+)
+
+# Insert local modules path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'database'))
+from twilio_reminder import send_call_reminder
 
+# 1. Setup paths & Initialize Flask app
+frontend_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'frontend')
 
-app = Flask(__name__)
+app = Flask(
+    __name__, 
+    template_folder=frontend_folder, 
+    static_folder=frontend_folder
+)
 app.secret_key = "sfce_secret_2025"
-
-# TwiML endpoint for custom call message
-@app.route('/twiml/fee_reminder.xml')
-def twiml_fee_reminder():
-    message = "Hello, this is a reminder from your college. Your fees payment is pending. Please complete the payment before the due date. Thank you."
-    twiml = f'''<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-    <Say voice="alice" language="en-US">{message}</Say>
-</Response>'''
-    return Response(twiml, mimetype='text/xml')
 
 DB_PATH = os.path.join(os.path.dirname(__file__), '..', 'database', 'fee_engine.db')
 
-
-# SendGrid API Key (keep secure in production!)
+# Env Variables
 SENDGRID_API_KEY = os.environ.get("SENDGRID_API_KEY", "DUMMY_SENDGRID_KEY_FOR_PUSH")
 SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "dummy@example.com")
-
-def send_email_reminder(to_email, subject, content):
-    url = "https://api.sendgrid.com/v3/mail/send"
-    headers = {
-        "Authorization": f"Bearer {SENDGRID_API_KEY}",
-        "Content-Type": "application/json"
-    }
-    data = {
-        "personalizations": [{"to": [{"email": to_email}]}],
-        "from": {"email": SENDER_EMAIL},
-        "subject": subject,
-        "content": [{"type": "text/plain", "value": content}]
-    }
-    r = requests.post(url, headers=headers, json=data)
-    return r.status_code, r.text
-
-# Admin endpoint to send reminder to a student (real email)
-@app.route('/admin/send_reminder', methods=['POST'])
-def admin_send_reminder():
-    data = request.json
-    student_id = data.get('student_id')
-    subject = data.get('subject', 'Fee Payment Reminder')
-    message = data.get('message', 'This is a reminder to pay your pending fees.')
-    conn = db()
-    row = conn.execute("SELECT email, name FROM students WHERE student_id=?", (student_id,)).fetchone()
-    conn.close()
-    if not row:
-        return jsonify({"status": "error", "msg": "Student not found"}), 404
-    email = row["email"]
-    name = row["name"]
-    status, resp = send_email_reminder(email, subject, f"Dear {name},\n\n{message}\n\n- Smart Fee Engine")
-    if status == 202:
-        return jsonify({"status": "sent", "to": email})
-    else:
-        return jsonify({"status": "error", "msg": resp}), 500
-"""
-Smart Fee Collection Engine — Flask Backend
-Run: python app.py
-"""
-from flask import Flask, jsonify, request, send_file, make_response
-import sqlite3, hashlib, uuid, os
-from datetime import datetime
-from io import BytesIO
-import sys
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'database'))
-
-app = Flask(__name__)
-app.secret_key = "sfce_secret_2025"
-
-DB_PATH = os.path.join(os.path.dirname(__file__), '..', 'database', 'fee_engine.db')
-
-# Warn if DB is missing
-if not os.path.exists(DB_PATH):
-    print("[ERROR] Database file not found at:", DB_PATH)
-    print("Please run 'python run.py' from the smart_fee_engine folder to initialize the database.")
-    raise FileNotFoundError(f"Database not found: {DB_PATH}")
 
 def db():
     conn = sqlite3.connect(DB_PATH)
@@ -111,6 +53,40 @@ def after_request(response):
 def handle_options():
     if request.method == 'OPTIONS':
         return cors(make_response()), 200
+
+# ── FRONTEND ROUTES ───────────────────────────────────────────────────
+@app.route('/')
+def home():
+    return render_template('index.html')
+
+@app.route('/<path:filename>')
+def serve_static(filename):
+    return send_from_directory(frontend_folder, filename)
+
+# ── TWIML & EMAIL HELPERS ─────────────────────────────────────────────
+@app.route('/twiml/fee_reminder.xml')
+def twiml_fee_reminder():
+    message = "Hello, this is a reminder from your college. Your fees payment is pending. Please complete the payment before the due date. Thank you."
+    twiml = f'''<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Say voice="alice" language="en-US">{message}</Say>
+</Response>'''
+    return Response(twiml, mimetype='text/xml')
+
+def send_email_reminder(to_email, subject, content):
+    url = "https://api.sendgrid.com/v3/mail/send"
+    headers = {
+        "Authorization": f"Bearer {SENDGRID_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    data = {
+        "personalizations": [{"to": [{"email": to_email}]}],
+        "from": {"email": SENDER_EMAIL},
+        "subject": subject,
+        "content": [{"type": "text/plain", "value": content}]
+    }
+    r = requests.post(url, headers=headers, json=data)
+    return r.status_code, r.text
 
 # ── AUTH ──────────────────────────────────────────────────────────────
 @app.route('/login', methods=['POST','OPTIONS'])
@@ -199,44 +175,61 @@ def request_emi():
     conn.commit(); conn.close()
     return jsonify({"status":"requested","installments":installments,"per_installment":per_inst})
 
-
-# Improved receipt download with error handling
 @app.route('/student/receipt/<receipt_no>')
 def download_receipt(receipt_no):
-        try:
-                conn = db()
-                p = conn.execute("SELECT p.*, s.name, s.department FROM payments p JOIN students s ON p.student_id=s.student_id WHERE p.receipt_no=?", (receipt_no,)).fetchone()
-                conn.close()
-                if not p:
-                        return '<h2 style="color:#ef4444;text-align:center;margin-top:60px">Receipt not found.</h2>', 404
-                p = dict(p)
-                html = f"""<!DOCTYPE html><html><head><title>Fee Receipt</title>
-                <style>body{{font-family:Arial,sans-serif;padding:40px;max-width:700px;margin:0 auto;}}
-                .header{{background:#1e3a5f;color:#fff;padding:24px;text-align:center;border-radius:10px 10px 0 0;}}
-                .header h2{{margin:0;font-size:22px;}}.header p{{margin:4px 0 0;opacity:0.8;font-size:13px;}}
-                table{{width:100%;border-collapse:collapse;margin-top:20px;border:1px solid #e2e8f0;}}
-                td{{padding:12px 16px;border:1px solid #e2e8f0;font-size:14px;}}
-                .label{{background:#f8fafc;font-weight:600;width:40%;color:#374151;}}
-                .footer{{text-align:center;margin-top:30px;color:#9ca3af;font-size:12px;border-top:1px solid #e2e8f0;padding-top:16px;}}
-                .stamp{{display:inline-block;border:3px solid #10b981;color:#10b981;padding:6px 20px;border-radius:4px;font-size:18px;font-weight:800;transform:rotate(-5deg);margin:10px;}}
-                </style></head><body>
-                <div class="header"><h2>🎓 Smart Fee Collection Engine</h2><p>Official Fee Payment Receipt</p></div>
-                <table>
-                    <tr><td class="label">Receipt No.</td><td><strong>{p['receipt_no']}</strong></td><td class="label">Payment Date</td><td>{p['payment_date']}</td></tr>
-                    <tr><td class="label">Student ID</td><td>{p['student_id']}</td><td class="label">Student Name</td><td>{p['name']}</td></tr>
-                    <tr><td class="label">Department</td><td>{p['department']}</td><td class="label">Transaction ID</td><td><code>{p['txn_id']}</code></td></tr>
-                    <tr><td class="label">Amount Paid</td><td><strong style="font-size:18px;color:#1e3a5f;">₹{float(p['amount']):,.2f}</strong></td><td class="label">Payment Method</td><td>{p['method']}</td></tr>
-                    <tr><td class="label">Payment Status</td><td colspan="3"><span style="color:#10b981;font-weight:700;font-size:16px;">✅ {p['status']}</span></td></tr>
-                </table>
-                <div style="text-align:center;margin-top:20px;"><span class="stamp">PAID</span></div>
-                <div class="footer"><p>This is a computer-generated receipt. No physical signature is required.</p><p>Smart Fee Collection Engine | Academic Year 2024-25</p></div>
-                </body></html>"""
-                buf = BytesIO(html.encode())
-                return send_file(buf, mimetype='text/html', as_attachment=False, download_name='fee_receipt.html')
-        except Exception as e:
-                return f'<h2 style="color:#ef4444;text-align:center;margin-top:60px">Error generating receipt: {str(e)}</h2>', 500
+    try:
+        conn = db()
+        p = conn.execute("SELECT p.*, s.name, s.department FROM payments p JOIN students s ON p.student_id=s.student_id WHERE p.receipt_no=?", (receipt_no,)).fetchone()
+        conn.close()
+        if not p:
+            return '<h2 style="color:#ef4444;text-align:center;margin-top:60px">Receipt not found.</h2>', 404
+        p = dict(p)
+        html = f"""<!DOCTYPE html><html><head><title>Fee Receipt</title>
+        <style>body{{font-family:Arial,sans-serif;padding:40px;max-width:700px;margin:0 auto;}}
+        .header{{background:#1e3a5f;color:#fff;padding:24px;text-align:center;border-radius:10px 10px 0 0;}}
+        .header h2{{margin:0;font-size:22px;}}.header p{{margin:4px 0 0;opacity:0.8;font-size:13px;}}
+        table{{width:100%;border-collapse:collapse;margin-top:20px;border:1px solid #e2e8f0;}}
+        td{{padding:12px 16px;border:1px solid #e2e8f0;font-size:14px;}}
+        .label{{background:#f8fafc;font-weight:600;width:40%;color:#374151;}}
+        .footer{{text-align:center;margin-top:30px;color:#9ca3af;font-size:12px;border-top:1px solid #e2e8f0;padding-top:16px;}}
+        .stamp{{display:inline-block;border:3px solid #10b981;color:#10b981;padding:6px 20px;border-radius:4px;font-size:18px;font-weight:800;transform:rotate(-5deg);margin:10px;}}
+        </style></head><body>
+        <div class="header"><h2>🎓 Smart Fee Collection Engine</h2><p>Official Fee Payment Receipt</p></div>
+        <table>
+            <tr><td class="label">Receipt No.</td><td><strong>{p['receipt_no']}</strong></td><td class="label">Payment Date</td><td>{p['payment_date']}</td></tr>
+            <tr><td class="label">Student ID</td><td>{p['student_id']}</td><td class="label">Student Name</td><td>{p['name']}</td></tr>
+            <tr><td class="label">Department</td><td>{p['department']}</td><td class="label">Transaction ID</td><td><code>{p['txn_id']}</code></td></tr>
+            <tr><td class="label">Amount Paid</td><td><strong style="font-size:18px;color:#1e3a5f;">₹{float(p['amount']):,.2f}</strong></td><td class="label">Payment Method</td><td>{p['method']}</td></tr>
+            <tr><td class="label">Payment Status</td><td colspan="3"><span style="color:#10b981;font-weight:700;font-size:16px;">✅ {p['status']}</span></td></tr>
+        </table>
+        <div style="text-align:center;margin-top:20px;"><span class="stamp">PAID</span></div>
+        <div class="footer"><p>This is a computer-generated receipt. No physical signature is required.</p><p>Smart Fee Collection Engine | Academic Year 2024-25</p></div>
+        </body></html>"""
+        buf = BytesIO(html.encode())
+        return send_file(buf, mimetype='text/html', as_attachment=False, download_name='fee_receipt.html')
+    except Exception as e:
+        return f'<h2 style="color:#ef4444;text-align:center;margin-top:60px">Error generating receipt: {str(e)}</h2>', 500
 
 # ── ADMIN ─────────────────────────────────────────────────────────────
+@app.route('/admin/send_reminder', methods=['POST'])
+def admin_send_reminder():
+    data = request.json
+    student_id = data.get('student_id')
+    subject = data.get('subject', 'Fee Payment Reminder')
+    message = data.get('message', 'This is a reminder to pay your pending fees.')
+    conn = db()
+    row = conn.execute("SELECT email, name FROM students WHERE student_id=?", (student_id,)).fetchone()
+    conn.close()
+    if not row:
+        return jsonify({"status": "error", "msg": "Student not found"}), 404
+    email = row["email"]
+    name = row["name"]
+    status, resp = send_email_reminder(email, subject, f"Dear {name},\n\n{message}\n\n- Smart Fee Engine")
+    if status == 202:
+        return jsonify({"status": "sent", "to": email})
+    else:
+        return jsonify({"status": "error", "msg": resp}), 500
+
 @app.route('/admin/send_call_reminder', methods=['POST'])
 def admin_send_call_reminder():
     data = request.json
@@ -244,13 +237,12 @@ def admin_send_call_reminder():
     if not to_phone:
         return jsonify({"status": "error", "msg": "Missing 'to_phone' parameter"}), 400
     try:
-        # Use NGROK_BASE_URL if set, else fallback to request.host_url
-        # Use Twilio's default demo voice message
         demo_url = "http://demo.twilio.com/docs/voice.xml"
         sid = send_call_reminder(to_phone, url=demo_url)
         return jsonify({"status": "sent", "sid": sid})
     except Exception as e:
         return jsonify({"status": "error", "msg": str(e)}), 500
+
 @app.route('/admin/students')
 def admin_students():
     search = request.args.get('search','')
@@ -281,10 +273,12 @@ def admin_analytics():
     monthly        = conn.execute("SELECT strftime('%Y-%m', payment_date) as month, SUM(amount) as collected FROM payments GROUP BY month ORDER BY month DESC LIMIT 12").fetchall()
     status_dist    = conn.execute("SELECT fee_status, COUNT(*) as cnt FROM fee_structure GROUP BY fee_status").fetchall()
     conn.close()
-    return jsonify({"summary":{"total_students":total_students,"total_fee":round(total_fee,2),"total_collected":round(total_collected,2),"total_pending":round(total_pending,2),"defaulters":defaulters},
-                    "by_department":[dict(r) for r in dept_data],
-                    "monthly_collection":[dict(r) for r in monthly],
-                    "status_distribution":[dict(r) for r in status_dist]})
+    return jsonify({
+        "summary":{"total_students":total_students,"total_fee":round(total_fee,2),"total_collected":round(total_collected,2),"total_pending":round(total_pending,2),"defaulters":defaulters},
+        "by_department":[dict(r) for r in dept_data],
+        "monthly_collection":[dict(r) for r in monthly],
+        "status_distribution":[dict(r) for r in status_dist]
+    })
 
 @app.route('/admin/defaulters')
 def admin_defaulters():
@@ -374,16 +368,8 @@ def chatbot():
         return jsonify({"reply":"Apply for an EMI plan from your dashboard under the 'EMI Plan' section."})
     else:
         return jsonify({"reply":"I can help with: pending fees, payment history, total fees, due dates, or EMI plans!"})
-frontend_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'frontend')
 
-app = Flask(__name__, 
-            template_folder=frontend_folder, 
-            static_folder=frontend_folder)@app.route('/')def home():
-    return render_template('index.html')  # Aapka main frontend file# CSS/JS and static assets serve karne ke liye@app.route('/<path:filename>')def serve_static(filename):
-    return send_from_directory(frontend_folder, filename) isko kaha par likhna hai 
+# ── SERVER START ──────────────────────────────────────────────────────
 if __name__ == '__main__':
     print("🎓 Smart Fee Collection Engine running on http://localhost:5001")
     app.run(debug=True, port=5001, host='0.0.0.0')
-@app.route('/')
-def home():
-    return "Smart AI Fee Engine Backend is Running!"

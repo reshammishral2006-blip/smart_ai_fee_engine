@@ -7,6 +7,8 @@ import sys
 from twilio_reminder import send_call_reminder
 from flask import Response
 import requests
+import os
+from flask import Flask, render_template, send_from_directory
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'database'))
 
@@ -372,7 +374,13 @@ def chatbot():
         return jsonify({"reply":"Apply for an EMI plan from your dashboard under the 'EMI Plan' section."})
     else:
         return jsonify({"reply":"I can help with: pending fees, payment history, total fees, due dates, or EMI plans!"})
+frontend_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'frontend')
 
+app = Flask(__name__, 
+            template_folder=frontend_folder, 
+            static_folder=frontend_folder)@app.route('/')def home():
+    return render_template('index.html')  # Aapka main frontend file# CSS/JS and static assets serve karne ke liye@app.route('/<path:filename>')def serve_static(filename):
+    return send_from_directory(frontend_folder, filename) isko kaha par likhna hai 
 if __name__ == '__main__':
     print("🎓 Smart Fee Collection Engine running on http://localhost:5001")
     app.run(debug=True, port=5001, host='0.0.0.0')

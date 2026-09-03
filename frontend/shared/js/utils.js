@@ -23,7 +23,6 @@ const fmt = (n) => '₹' + parseFloat(n||0).toLocaleString('en-IN', { minimumFra
 
 const api = async (path, opts={}) => {
   try {
-    // Ensure path starts with /
     const cleanPath = path.startsWith('/') ? path : '/' + path;
     const r = await fetch(API + cleanPath, {
       headers: { 'Content-Type': 'application/json' },

@@ -113,7 +113,8 @@ def login():
         return jsonify({"status": "error", "message": "Invalid Admin Credentials"}), 401
 
     # 2. Student Login Check
- @app.route('/login', methods=['POST'])
+# Make sure @app.route is at the root level (no leading indentation)
+@app.route('/login', methods=['POST'])
 def login():
     try:
         data = request.json or {}
@@ -129,17 +130,16 @@ def login():
 
         # 2. Student Login
         elif role == 'student':
-            # FIX: Use the existing function or helper in your app.py to get students
-            # If your app defines a helper like get_students() or a global list/dict, use that here:
-            if 'get_students' in globals():
+            # Use whichever variable or function loads your student list in app.py
+            if 'admin_students' in globals():
+                students = admin_students
+            elif 'get_students' in globals():
                 students = get_students()
             elif 'STUDENTS' in globals():
                 students = STUDENTS
             else:
-                # Fallback: parse students directly from your local dataset if needed
                 students = []
 
-            # Search student list for matching ID (case-insensitive)
             student = next((s for s in students if str(s.get('id', '')).upper() == username), None)
 
             if student:

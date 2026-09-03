@@ -99,59 +99,36 @@ def send_email_reminder(to_email, subject, content):
 # ── AUTHENTICATION ────────────────────────────────────────────────────
 @app.route('/login', methods=['POST'])
 def login():
-    data = request.json or {}
-    # Trim and handle case-sensitivity
-    username = str(data.get('username', '')).strip().upper()
-    password = str(data.get('password', '')).strip()
-    role = data.get('role', 'student')
-
-    # 1. Admin Login Check
-    if role == 'admin':
-        # Admin credentials (Case-insensitive for username)
-        if username == 'ADMIN' and password == 'admin@123':
-            return jsonify({"status": "success", "role": "admin"})
-        return jsonify({"status": "error", "message": "Invalid Admin Credentials"}), 401
-
-    # 2. Student Login Check
-# Make sure @app.route is at the root level (no leading indentation)
-@app.route('/login', methods=['POST'])
-def login():
     try:
         data = request.json or {}
         username = str(data.get('username', '')).strip().upper()
         password = str(data.get('password', '')).strip()
         role = data.get('role', 'student')
 
-        # 1. Admin Login
+        # 1. Admin Login Check
         if role == 'admin':
             if username == 'ADMIN' and password == 'admin@123':
                 return jsonify({"status": "success", "role": "admin", "username": "admin"})
             return jsonify({"status": "error", "message": "Invalid Admin Credentials"}), 401
 
-        # 2. Student Login
+        # 2. Student Login Check
         elif role == 'student':
-            # Use whichever variable or function loads your student list in app.py
-            if 'admin_students' in globals():
-                students = admin_students
-            elif 'get_students' in globals():
-                students = get_students()
-            elif 'STUDENTS' in globals():
-                students = STUDENTS
-            else:
-                students = []
-
-            student = next((s for s in students if str(s.get('id', '')).upper() == username), None)
+            conn = db()
+            student = conn.execute(
+                "SELECT student_id, name, email FROM students WHERE UPPER(student_id)=?", 
+                (username,)
+            ).fetchone()
+            conn.close()
 
             if student:
                 expected_default_pass = f"{username}@Fee"
-                student_pass = str(student.get('password', ''))
 
-                if password and (password == student_pass or password == expected_default_pass):
+                if password and (password == expected_default_pass or password == "student123"):
                     return jsonify({
                         "status": "success",
                         "role": "student",
-                        "student_id": student.get('id', username),
-                        "name": student.get('name', 'Student')
+                        "student_id": student['student_id'],
+                        "name": student['name']
                     })
 
             return jsonify({"status": "error", "message": "Invalid Student ID or Password"}), 401
@@ -161,6 +138,8 @@ def login():
     except Exception as e:
         print(f"Login error: {e}")
         return jsonify({"status": "error", "message": "Internal Server Error"}), 500
+
+
 # ── STUDENT MODULE ────────────────────────────────────────────────────
 @app.route('/student/dashboard')
 def student_dashboard():
@@ -207,7 +186,7 @@ def student_payment():
     new_pending = max(0, float(fs['total_fee']) - new_paid)
     status = "Fully Paid" if new_pending == 0 else "Half Paid"
     txn_id = "TXN" + uuid.uuid4().hex[:10].upper()
-    receipt = "RCP" + sid + datetime.now().strftime("%m%d%H%M")
+    receipt = "RCP" + str(sid) + datetime.now().strftime("%m%d%H%M")
     
     conn.execute("UPDATE fee_structure SET paid_amount=?, pending_fee=?, fee_status=?, defaulter_status=? WHERE student_id=?",
                  (new_paid, new_pending, status, "Paid" if new_pending == 0 else "Pending", sid))

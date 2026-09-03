@@ -92,7 +92,6 @@ function setRole(role, btn) {
   document.getElementById('idLabel').textContent = role==='admin' ? 'Username' : 'Student ID / Email';
   document.getElementById('uid').placeholder = role==='admin' ? 'admin' : 'e.g. AIML001';
 }
-
 async function doLogin() {
   const uid = document.getElementById('uid').value.trim();
   const pwd = document.getElementById('pwd').value.trim();
@@ -100,40 +99,47 @@ async function doLogin() {
   const btn = document.getElementById('loginBtn');
   
   if (!uid || !pwd) { 
-    alertBox.innerHTML='<div class="alert alert-warning">Please fill all fields.</div>'; 
+    alertBox.innerHTML = '<div class="alert alert-warning">Please fill all fields.</div>'; 
     return; 
   }
   
-  btn.textContent='Signing in...'; 
-  btn.disabled=true;
+  btn.textContent = 'Signing in...'; 
+  btn.disabled = true;
   
   try {
     const res = await api('/login', {
       method: 'POST', 
-      body: JSON.stringify({ role: currentRole, id: uid, password: pwd })
+      // Fix: 'username' keys use ki hai jo backend app.py expect kar raha hai
+      body: JSON.stringify({ 
+        role: currentRole, 
+        username: uid, 
+        password: pwd 
+      })
     });
     
-    btn.textContent='Sign In →'; 
-    btn.disabled=false;
+    btn.textContent = 'Sign In →'; 
+    btn.disabled = false;
     
-    if (!res || res.status==='error') {
-      alertBox.innerHTML=`<div class="alert alert-danger">${res?.msg||'Login failed. Check credentials.'}</div>`;
+    if (!res || res.status === 'error') {
+      alertBox.innerHTML = `<div class="alert alert-danger">${res?.msg || res?.message || 'Login failed. Check credentials.'}</div>`;
       return;
     }
     
     localStorage.setItem('role', res.role);
-    if (res.role==='student') {
+    if (res.role === 'student') {
       localStorage.setItem('student_id', res.student_id);
       localStorage.setItem('student_name', res.name);
-      window.location.href='student/pages/dashboard.html';
+      // Fix: Absolute path from root
+      window.location.href = '/student/pages/dashboard.html';
     } else {
       localStorage.setItem('admin_user', res.username);
-      window.location.href='admin/pages/dashboard.html';
+      // Fix: Absolute path from root
+      window.location.href = '/admin/pages/dashboard.html';
     }
   } catch(err) {
-    btn.textContent='Sign In →'; 
-    btn.disabled=false;
-    alertBox.innerHTML='<div class="alert alert-danger">Failed to connect to backend server.</div>';
+    btn.textContent = 'Sign In →'; 
+    btn.disabled = false;
+    alertBox.innerHTML = '<div class="alert alert-danger">Failed to connect to backend server.</div>';
   }
 }
 

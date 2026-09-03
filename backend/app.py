@@ -13,12 +13,8 @@ from flask import (
     make_response, Response, render_template, send_from_directory
 )
 
-# 1. System path and Twilio module setup
+# 1. System path setup
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'database'))
-try:
-    from twilio_reminder import send_call_reminder
-except ImportError:
-    send_call_reminder = None
 
 # 2. Paths & App Configuration
 frontend_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'frontend')
@@ -32,9 +28,22 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "sfce_secret_2025")
 
 DB_PATH = os.path.join(os.path.dirname(__file__), '..', 'database', 'fee_engine.db')
 
-# Environment Variables
-SENDGRID_API_KEY = os.environ.get("SENDGRID_API_KEY", "DUMMY_SENDGRID_KEY_FOR_PUSH")
+# Environment Variables Load
+SENDGRID_API_KEY = os.environ.get("SENDGRID_API_KEY", "")
 SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "dummy@example.com")
+
+TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
+TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
+TWILIO_PHONE_NUMBER = os.environ.get("TWILIO_PHONE_NUMBER")
+
+# Initialize Twilio Client
+twilio_client = None
+if TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN:
+    try:
+        from twilio.rest import Client
+        twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+    except Exception as e:
+        print(f"Twilio Initialization Error: {e}")
 
 # Helper Functions
 def db():
@@ -74,7 +83,7 @@ def serve_static(filename):
 # ── REMINDER HELPERS (EMAIL & TWILIO) ─────────────────────────────────
 @app.route('/twiml/fee_reminder.xml')
 def twiml_fee_reminder():
-    message = "Hello, this is a reminder from your college. Your fees payment is pending. Please complete the payment before the due date. Thank you."
+    message = "Hello, this is an automated reminder from your college. Your fee payment is pending. Please complete the payment at the earliest. Thank you."
     twiml = f'''<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Say voice="alice" language="en-US">{message}</Say>
@@ -278,19 +287,29 @@ def admin_send_reminder():
         return jsonify({"status": "sent", "to": email})
     return jsonify({"status": "error", "msg": resp}), 500
 
-@app.route('/admin/send_call_reminder', methods=['POST'])
+@app.route('/admin/send_call_reminder', methods=['POST','OPTIONS'])
 def admin_send_call_reminder():
-    if not send_call_reminder:
-        return jsonify({"status": "error", "msg": "Twilio functionality not loaded"}), 500
     data = request.json or {}
-    to_phone = data.get('to_phone')
+    to_phone = data.get('to_phone') or data.get('phone')
+    
     if not to_phone:
         return jsonify({"status": "error", "msg": "Missing 'to_phone' parameter"}), 400
+        
+    if not twilio_client:
+        return jsonify({"status": "error", "msg": "Twilio environment variables not configured on Render"}), 500
+
     try:
-        demo_url = "http://demo.twilio.com/docs/voice.xml"
-        sid = send_call_reminder(to_phone, url=demo_url)
-        return jsonify({"status": "sent", "sid": sid})
+        # Live Render App TwiML endpoint URL
+        twiml_url = f"{request.url_root.rstrip('/')}/twiml/fee_reminder.xml"
+        
+        call = twilio_client.calls.create(
+            url=twiml_url,
+            to=to_phone,
+            from_=TWILIO_PHONE_NUMBER
+        )
+        return jsonify({"status": "sent", "sid": call.sid, "call_status": call.status})
     except Exception as e:
+        print(f"Twilio Call Error: {e}")
         return jsonify({"status": "error", "msg": str(e)}), 500
 
 @app.route('/admin/students')

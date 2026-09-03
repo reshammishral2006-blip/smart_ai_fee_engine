@@ -1,0 +1,97 @@
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>EMI Plan — Smart Fee Engine</title>
+<link rel="stylesheet" href="../../shared/css/common.css">
+<style>
+.emi-card{background:linear-gradient(135deg,#1e3a5f,#2e5484);color:#fff;border-radius:16px;padding:28px;margin-bottom:24px;}
+.emi-schedule{display:flex;flex-direction:column;gap:8px;}
+.inst-item{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;}
+.inst-paid{border-color:#10b981;background:#f0fdf4;}
+</style>
+</head><body>
+<div class="sidebar">
+  <div class="sidebar-logo"><h2>🎓 Smart Fee Engine</h2><span>Student Portal</span></div>
+  <nav class="sidebar-nav">
+    <a class="nav-item" href="dashboard.html"><span class="nav-icon">🏠</span> Dashboard</a>
+    <a class="nav-item" href="profile.html"><span class="nav-icon">👤</span> My Profile</a>
+    <a class="nav-item" href="payments.html"><span class="nav-icon">💳</span> Pay Fees</a>
+    <a class="nav-item" href="history.html"><span class="nav-icon">📋</span> Payment History</a>
+    <a class="nav-item active" href="emi.html"><span class="nav-icon">📅</span> EMI Plan</a>
+    <a class="nav-item" href="receipts.html"><span class="nav-icon">🧾</span> Receipts</a>
+  </nav>
+  <div class="sidebar-bottom"><button class="nav-item" onclick="logout()"><span class="nav-icon">🚪</span> Logout</button></div>
+</div>
+<div class="main-content">
+  <div class="topbar"><div class="topbar-title">📅 EMI Plan</div></div>
+  <div class="page-content" id="content"><div class="loading"><div class="spinner"></div></div></div>
+</div>
+<div id="toast"></div>
+<script src="../../shared/js/utils.js"></script>
+<script>
+const sid=localStorage.getItem('student_id');
+if(!sid)window.location.href='../../index.html';
+
+async function load(){
+  const [dash,emi]=await Promise.all([api(`/student/dashboard?student_id=${sid}`),api(`/student/emi?student_id=${sid}`)]);
+  let html='';
+  if(emi&&emi.id){
+    const statusColor={Approved:'success',Pending:'warning',Rejected:'danger'};
+    html+=`<div class="emi-card">
+      <div style="font-size:13px;opacity:0.8">Active EMI Plan</div>
+      <div style="font-size:28px;font-weight:800;margin:8px 0">${fmt(emi.amount_per_installment)} <span style="font-size:15px;opacity:0.7">/ installment</span></div>
+      <div style="display:flex;gap:20px;font-size:13px;opacity:0.85">
+        <span>📦 ${emi.installments} Installments</span>
+        <span>✅ ${emi.paid_installments} Paid</span>
+        <span>💰 ${fmt(emi.total_amount)} Total</span>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-title">Plan Status</div>
+      <div style="display:flex;gap:12px;align-items:center">
+        ${statusBadge(emi.status)}
+        <span style="font-size:14px;color:#718096">Requested: ${formatDate(emi.requested_at)}</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">📅 Installment Schedule</div>
+      <div class="emi-schedule">`;
+    for(let i=1;i<=emi.installments;i++){
+      const paid=i<=emi.paid_installments;
+      html+=`<div class="inst-item ${paid?'inst-paid':''}">
+        <div><strong>Installment ${i}</strong><br><span style="font-size:13px;color:#718096">Due: ${getInstDate(emi.requested_at,i)}</span></div>
+        <div style="text-align:right"><strong>${fmt(emi.amount_per_installment)}</strong><br>${paid?'<span style="color:#10b981;font-size:13px">✅ Paid</span>':'<span style="color:#f59e0b;font-size:13px">⏳ Pending</span>'}</div>
+      </div>`;
+    }
+    html+='</div></div>';
+  } else if(dash) {
+    html=`<div class="card" style="max-width:500px;margin:0 auto">
+      <div class="card-title">Apply for EMI Plan</div>
+      <p style="color:#718096;margin-bottom:20px;font-size:14px">Split your pending fee of <strong>${fmt(dash.pending_fee)}</strong> into easy installments.</p>
+      <div class="form-group"><label class="form-label">Number of Installments</label>
+        <select class="form-control" id="instCount">
+          <option value="2">2 Installments (${fmt(dash.pending_fee/2)} each)</option>
+          <option value="3" selected>3 Installments (${fmt(dash.pending_fee/3)} each)</option>
+          <option value="4">4 Installments (${fmt(dash.pending_fee/4)} each)</option>
+          <option value="6">6 Installments (${fmt(dash.pending_fee/6)} each)</option>
+        </select>
+      </div>
+      <div id="emiAlert"></div>
+      <button class="btn btn-primary btn-block" onclick="applyEMI()">📋 Apply for EMI Plan</button>
+      <p style="font-size:12px;color:#718096;margin-top:12px;text-align:center">Admin approval required. You'll be notified once approved.</p>
+    </div>`;
+  }
+  document.getElementById('content').innerHTML=html||'<div class="alert alert-info">No pending fees for EMI.</div>';
+}
+function getInstDate(start,n){
+  const d=new Date(start);d.setMonth(d.getMonth()+n);
+  return d.toLocaleDateString('en-IN',{month:'short',year:'numeric'});
+}
+async function applyEMI(){
+  const n=document.getElementById('instCount').value;
+  const res=await api('/student/emi/request',{method:'POST',body:JSON.stringify({student_id:sid,installments:parseInt(n)})});
+  if(res&&res.status==='requested'){toast('EMI plan requested! Pending admin approval.','success');setTimeout(load,1500);}
+  else toast('Request failed','danger');
+}
+load();
+</script>
+</body></html>

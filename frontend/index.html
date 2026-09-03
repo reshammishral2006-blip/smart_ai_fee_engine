@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Smart Fee Collection Engine — Login</title>
+<link rel="stylesheet" href="shared/css/common.css">
+<style>
+body{display:flex;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,#1e3a5f 0%,#2e5484 50%,#1a2f4e 100%);}
+.login-wrapper{display:flex;background:#fff;border-radius:24px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.3);width:900px;max-width:96vw;}
+.login-left{flex:1;background:linear-gradient(160deg,#1e3a5f,#2e5484);padding:50px 40px;display:flex;flex-direction:column;justify-content:center;color:#fff;}
+.login-left h1{font-size:28px;font-weight:800;margin-bottom:10px;line-height:1.3;}
+.login-left p{opacity:0.75;font-size:15px;margin-bottom:32px;}
+.feature{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.1);font-size:14px;opacity:0.85;}
+.feature:last-child{border-bottom:none;}
+.feature-icon{font-size:20px;}
+.login-right{flex:1;padding:50px 40px;display:flex;flex-direction:column;justify-content:center;}
+.login-right h2{font-size:24px;font-weight:800;color:#1e3a5f;margin-bottom:6px;}
+.login-right p{color:#718096;font-size:14px;margin-bottom:28px;}
+.tab-group{display:flex;background:#f0f4f8;border-radius:10px;padding:4px;margin-bottom:24px;}
+.tab-btn{flex:1;padding:9px;border:none;background:transparent;border-radius:7px;font-size:14px;font-weight:600;cursor:pointer;color:#718096;transition:all 0.2s;}
+.tab-btn.active{background:#fff;color:#1e3a5f;box-shadow:0 2px 8px rgba(0,0,0,0.1);}
+.demo-info{background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:12px;font-size:13px;margin-top:16px;color:#0369a1;}
+.demo-info strong{display:block;margin-bottom:4px;}
+</style>
+</head>
+<body>
+<div class="login-wrapper">
+  <div class="login-left">
+    <div style="font-size:48px;margin-bottom:16px;">🎓</div>
+    <h1>Smart Fee Collection Engine</h1>
+    <p>Academic Year 2024-25 | All Departments</p>
+    <div class="feature"><span class="feature-icon">💳</span> Online Fee Payment</div>
+    <div class="feature"><span class="feature-icon">📊</span> Real-time Analytics</div>
+    <div class="feature"><span class="feature-icon">📅</span> EMI Plans</div>
+    <div class="feature"><span class="feature-icon">🔔</span> Smart Reminders</div>
+    <div class="feature"><span class="feature-icon">🤖</span> AI Fee Assistant</div>
+    <div class="feature"><span class="feature-icon">🧾</span> Instant Receipts</div>
+  </div>
+  <div class="login-right">
+    <h2>Welcome Back</h2>
+    <p>Sign in to access your fee portal</p>
+    <div class="tab-group">
+      <button class="tab-btn active" onclick="setRole('student',this)">🎓 Student</button>
+      <button class="tab-btn" onclick="setRole('admin',this)">🛡️ Admin</button>
+    </div>
+    <div id="alertBox"></div>
+    <div class="form-group">
+      <label class="form-label" id="idLabel">Student ID / Email</label>
+      <input class="form-control" id="uid" placeholder="e.g. AIML001 or your email" autocomplete="username">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Password</label>
+      <input class="form-control" id="pwd" type="password" placeholder="Enter password" autocomplete="current-password">
+    </div>
+    <button class="btn btn-primary btn-block btn-lg" onclick="doLogin()" id="loginBtn">Sign In →</button>
+    <div class="demo-info">
+      <strong>🔐 Demo Credentials</strong>
+      Student: ID = <code>AIML001</code> | Password = <code>0001@Fee</code><br>
+      Admin: Username = <code>admin</code> | Password = <code>admin@123</code>
+    </div>
+    <button class="btn btn-warning btn-block" style="margin-top:18px" onclick="triggerCallReminder()">📞 Call Reminder (Demo)</button>
+  </div>
+</div>
+<div id="toast"></div>
+<script src="shared/js/utils.js"></script>
+<script>
+async function triggerCallReminder() {
+  const phone = prompt('Enter phone number to call (e.g. +911234567890):', '+91');
+  if (!phone) return;
+  try {
+    const res = await fetch('/admin/send_call_reminder', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to_phone: phone })
+    });
+    const data = await res.json();
+    if (data.status === 'sent') {
+      toast('Call reminder sent! SID: ' + data.sid, 'success');
+    } else {
+      toast('Failed to send call: ' + (data.msg || 'Unknown error'), 'danger');
+    }
+  } catch (err) {
+    toast('Network error connecting to backend.', 'danger');
+  }
+}
+
+let currentRole = 'student';
+function setRole(role, btn) {
+  currentRole = role;
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('idLabel').textContent = role==='admin' ? 'Username' : 'Student ID / Email';
+  document.getElementById('uid').placeholder = role==='admin' ? 'admin' : 'e.g. AIML001';
+}
+async function doLogin() {
+  const uid = document.getElementById('uid').value.trim();
+  const pwd = document.getElementById('pwd').value.trim();
+  const alertBox = document.getElementById('alertBox');
+  const btn = document.getElementById('loginBtn');
+  
+  if (!uid || !pwd) { 
+    alertBox.innerHTML = '<div class="alert alert-warning">Please fill all fields.</div>'; 
+    return; 
+  }
+  
+  btn.textContent = 'Signing in...'; 
+  btn.disabled = true;
+  
+  try {
+    const response = await fetch('/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        role: currentRole,
+        username: uid,
+        password: pwd
+      })
+    });
+    const res = await response.json();
+    
+    btn.textContent = 'Sign In →'; 
+    btn.disabled = false;
+    
+    if (!response.ok || !res || res.status === 'error') {
+      alertBox.innerHTML = `<div class="alert alert-danger">${res?.msg || res?.message || 'Login failed. Check credentials.'}</div>`;
+      return;
+    }
+    
+    localStorage.setItem('role', res.role);
+    if (res.role === 'student') {
+      localStorage.setItem('student_id', res.student_id);
+      localStorage.setItem('student_name', res.name);
+      // Fix: Absolute path from root
+      window.location.href = '/student/pages/dashboard.html';
+    } else {
+      localStorage.setItem('admin_user', res.username);
+      // Fix: Absolute path from root
+      window.location.href = '/admin/pages/dashboard.html';
+    }
+  } catch(err) {
+    btn.textContent = 'Sign In →'; 
+    btn.disabled = false;
+    alertBox.innerHTML = '<div class="alert alert-danger">Failed to connect to backend server.</div>';
+  }
+}
+
+document.getElementById('pwd').addEventListener('keyup', e => { if(e.key==='Enter') doLogin(); });
+</script>
+</body>
+</html>

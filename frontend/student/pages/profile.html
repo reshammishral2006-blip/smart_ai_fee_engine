@@ -1,0 +1,69 @@
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>My Profile — Smart Fee Engine</title>
+<link rel="stylesheet" href="../../shared/css/common.css">
+<style>
+.profile-header{background:linear-gradient(135deg,#1e3a5f,#2e5484);border-radius:16px;padding:32px;color:#fff;display:flex;align-items:center;gap:24px;margin-bottom:24px;}
+.avatar{width:80px;height:80px;border-radius:50%;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-size:36px;border:3px solid rgba(255,255,255,0.4);}
+.info-row{display:flex;padding:12px 0;border-bottom:1px solid var(--border);align-items:center;}
+.info-row:last-child{border-bottom:none;}
+.info-label{width:180px;font-weight:600;color:var(--muted);font-size:14px;}
+.info-value{font-size:14px;color:var(--text);}
+</style>
+</head><body>
+<div class="sidebar">
+  <div class="sidebar-logo"><h2>🎓 Smart Fee Engine</h2><span>Student Portal</span></div>
+  <nav class="sidebar-nav">
+    <a class="nav-item" href="dashboard.html"><span class="nav-icon">🏠</span> Dashboard</a>
+    <a class="nav-item active" href="profile.html"><span class="nav-icon">👤</span> My Profile</a>
+    <a class="nav-item" href="payments.html"><span class="nav-icon">💳</span> Pay Fees</a>
+    <a class="nav-item" href="history.html"><span class="nav-icon">📋</span> Payment History</a>
+    <a class="nav-item" href="emi.html"><span class="nav-icon">📅</span> EMI Plan</a>
+    <a class="nav-item" href="receipts.html"><span class="nav-icon">🧾</span> Receipts</a>
+  </nav>
+  <div class="sidebar-bottom"><button class="nav-item" onclick="logout()"><span class="nav-icon">🚪</span> Logout</button></div>
+</div>
+<div class="main-content">
+  <div class="topbar"><div class="topbar-title">👤 My Profile</div></div>
+  <div class="page-content">
+    <div id="content"><div class="loading"><div class="spinner"></div></div></div>
+  </div>
+</div>
+<div id="toast"></div>
+<script src="../../shared/js/utils.js"></script>
+<script>
+const sid=localStorage.getItem('student_id');
+if(!sid)window.location.href='../../index.html';
+async function load(){
+  const d=await api(`/student/dashboard?student_id=${sid}`);
+  if(!d)return;
+  const initials=d.name.split(' ').map(n=>n[0]).join('').slice(0,2);
+  document.getElementById('content').innerHTML=`
+    <div class="profile-header">
+      <div class="avatar">${initials}</div>
+      <div><h2>${d.name}</h2><p style="opacity:0.8">${d.department} — Year ${d.year}</p><p style="opacity:0.7;font-size:13px">${d.student_id}</p></div>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">Personal Information</div>
+        <div class="info-row"><span class="info-label">Student ID</span><span class="info-value"><code>${d.student_id}</code></span></div>
+        <div class="info-row"><span class="info-label">Full Name</span><span class="info-value">${d.name}</span></div>
+        <div class="info-row"><span class="info-label">Email</span><span class="info-value">${d.email}</span></div>
+        <div class="info-row"><span class="info-label">Parent Phone</span><span class="info-value">${d.parent_phone}</span></div>
+        <div class="info-row"><span class="info-label">Department</span><span class="info-value">${d.department}</span></div>
+        <div class="info-row"><span class="info-label">Year</span><span class="info-value">Year ${d.year}</span></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Fee Summary</div>
+        <div class="info-row"><span class="info-label">Total Fee</span><span class="info-value"><strong>${fmt(d.total_fee)}</strong></span></div>
+        <div class="info-row"><span class="info-label">Paid Amount</span><span class="info-value" style="color:#10b981"><strong>${fmt(d.paid_amount)}</strong></span></div>
+        <div class="info-row"><span class="info-label">Pending Fee</span><span class="info-value" style="color:#ef4444"><strong>${fmt(d.pending_fee)}</strong></span></div>
+        <div class="info-row"><span class="info-label">Scholarship</span><span class="info-value" style="color:#3b82f6"><strong>${fmt(d.scholarship)}</strong></span></div>
+        <div class="info-row"><span class="info-label">Due Date</span><span class="info-value">${formatDate(d.due_date)}</span></div>
+        <div class="info-row"><span class="info-label">Fee Status</span><span class="info-value">${statusBadge(d.fee_status)}</span></div>
+      </div>
+    </div>`;
+}
+load();
+</script>
+</body></html>

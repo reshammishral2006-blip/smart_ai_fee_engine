@@ -1,0 +1,106 @@
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Students — Admin Panel</title>
+<link rel="stylesheet" href="../../shared/css/common.css">
+<style>
+.search-bar{display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap;}
+.search-bar input,.search-bar select{padding:10px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;}
+.search-bar input{flex:1;min-width:200px;}
+</style>
+</head><body>
+<div class="sidebar">
+  <div class="sidebar-logo"><h2>🛡️ Admin Panel</h2><span>Smart Fee Engine</span></div>
+  <nav class="sidebar-nav">
+    <a class="nav-item" href="dashboard.html"><span class="nav-icon">📊</span> Dashboard</a>
+    <a class="nav-item active" href="students.html"><span class="nav-icon">🎓</span> Students</a>
+    <a class="nav-item" href="defaulters.html"><span class="nav-icon">⚠️</span> Defaulters</a>
+    <a class="nav-item" href="emi-approvals.html"><span class="nav-icon">📅</span> EMI Approvals</a>
+    <a class="nav-item" href="reminders.html"><span class="nav-icon">🔔</span> Reminders</a>
+    <a class="nav-item" href="upload.html"><span class="nav-icon">📤</span> Upload Dataset</a>
+    <a class="nav-item" href="analytics.html"><span class="nav-icon">📈</span> Analytics</a>
+  </nav>
+  <div class="sidebar-bottom"><button class="nav-item" onclick="logout('admin')"><span class="nav-icon">🚪</span> Logout</button></div>
+</div>
+<div class="main-content">
+  <div class="topbar"><div class="topbar-title">🎓 All Students</div><div id="countBadge" style="font-weight:700;color:#1e3a5f;"></div></div>
+  <div class="page-content">
+    <div class="search-bar">
+      <input id="searchInput" placeholder="🔍 Search by name, ID or email..." oninput="load()">
+      <select id="deptFilter" onchange="load()">
+        <option value="">All Departments</option>
+        <option>AIML</option><option>CSE</option><option>Civil</option>
+        <option>Mechanical</option><option>Electronics</option><option>Other</option>
+      </select>
+      <button class="btn btn-primary" onclick="load()">Search</button>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden;">
+      <div id="tableArea"><div class="loading" style="padding:40px;"><div class="spinner" style="margin:0 auto"></div></div></div>
+    </div>
+  </div>
+</div>
+<!-- Edit Modal -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal">
+    <div class="modal-header"><span class="modal-title">✏️ Edit Fee Record</span><button class="modal-close" onclick="hideModal('editModal')">✕</button></div>
+    <input type="hidden" id="editSid">
+    <div class="form-group"><label class="form-label">Total Fee</label><input class="form-control" id="editTotal" type="number"></div>
+    <div class="form-group"><label class="form-label">Paid Amount</label><input class="form-control" id="editPaid" type="number"></div>
+    <div class="form-group"><label class="form-label">Pending Fee</label><input class="form-control" id="editPending" type="number"></div>
+    <div class="form-group"><label class="form-label">Due Date</label><input class="form-control" id="editDue" type="date"></div>
+    <div class="form-group"><label class="form-label">Fee Status</label>
+      <select class="form-control" id="editStatus">
+        <option>Fully Paid</option><option>Half Paid</option><option>Overdue</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+      <button class="btn btn-outline" onclick="hideModal('editModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEdit()">💾 Save Changes</button>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+<script src="../../shared/js/utils.js"></script>
+<script>
+if(!localStorage.getItem('admin_user'))window.location.href='../../index.html';
+async function load(){
+  const search=document.getElementById('searchInput').value;
+  const dept=document.getElementById('deptFilter').value;
+  const data=await api(`/admin/students?search=${encodeURIComponent(search)}&dept=${dept}`);
+  if(!data)return;
+  document.getElementById('countBadge').textContent=`${data.length} students`;
+  document.getElementById('tableArea').innerHTML=`
+    <table class="table">
+      <thead><tr><th>Student ID</th><th>Name</th><th>Dept</th><th>Yr</th><th>Total Fee</th><th>Paid</th><th>Pending</th><th>Due Date</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody>${data.map(s=>`<tr>
+        <td><code>${s.student_id}</code></td><td>${s.name}</td><td>${s.department}</td><td>${s.year}</td>
+        <td>${fmt(s.total_fee)}</td><td style="color:#10b981">${fmt(s.paid_amount)}</td>
+        <td style="color:#ef4444">${fmt(s.pending_fee)}</td>
+        <td>${formatDate(s.due_date)}</td><td>${statusBadge(s.fee_status)}</td>
+        <td><button class="btn btn-sm btn-outline" onclick='openEdit(${JSON.stringify(s)})'>✏️ Edit</button></td>
+      </tr>`).join('')}</tbody>
+    </table>`;
+}
+function openEdit(s){
+  document.getElementById('editSid').value=s.student_id;
+  document.getElementById('editTotal').value=s.total_fee;
+  document.getElementById('editPaid').value=s.paid_amount;
+  document.getElementById('editPending').value=s.pending_fee;
+  document.getElementById('editDue').value=s.due_date;
+  document.getElementById('editStatus').value=s.fee_status;
+  showModal('editModal');
+}
+async function saveEdit(){
+  const sid=document.getElementById('editSid').value;
+  const res=await api('/admin/fee/edit',{method:'POST',body:JSON.stringify({
+    student_id:sid,
+    total_fee:+document.getElementById('editTotal').value,
+    paid_amount:+document.getElementById('editPaid').value,
+    pending_fee:+document.getElementById('editPending').value,
+    due_date:document.getElementById('editDue').value,
+    fee_status:document.getElementById('editStatus').value
+  })});
+  if(res){hideModal('editModal');toast('Record updated!','success');load();}
+}
+load();
+</script>
+</body></html>

@@ -1,0 +1,62 @@
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>EMI Approvals — Admin Panel</title>
+<link rel="stylesheet" href="../../shared/css/common.css">
+</head><body>
+<div class="sidebar">
+  <div class="sidebar-logo"><h2>🛡️ Admin Panel</h2><span>Smart Fee Engine</span></div>
+  <nav class="sidebar-nav">
+    <a class="nav-item" href="dashboard.html"><span class="nav-icon">📊</span> Dashboard</a>
+    <a class="nav-item" href="students.html"><span class="nav-icon">🎓</span> Students</a>
+    <a class="nav-item" href="defaulters.html"><span class="nav-icon">⚠️</span> Defaulters</a>
+    <a class="nav-item active" href="emi-approvals.html"><span class="nav-icon">📅</span> EMI Approvals</a>
+    <a class="nav-item" href="reminders.html"><span class="nav-icon">🔔</span> Reminders</a>
+    <a class="nav-item" href="upload.html"><span class="nav-icon">📤</span> Upload Dataset</a>
+    <a class="nav-item" href="analytics.html"><span class="nav-icon">📈</span> Analytics</a>
+  </nav>
+  <div class="sidebar-bottom"><button class="nav-item" onclick="logout('admin')"><span class="nav-icon">🚪</span> Logout</button></div>
+</div>
+<div class="main-content">
+  <div class="topbar"><div class="topbar-title">📅 EMI Plan Approvals</div></div>
+  <div class="page-content">
+    <div class="card" style="padding:0;overflow:hidden;">
+      <div id="tableArea"><div class="loading" style="padding:40px;"><div class="spinner" style="margin:0 auto"></div></div></div>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+<script src="../../shared/js/utils.js"></script>
+<script>
+if(!localStorage.getItem('admin_user'))window.location.href='../../index.html';
+async function load(){
+  const data=await api('/admin/emi/all');
+  if(!data)return;
+  if(!data.length){document.getElementById('tableArea').innerHTML='<div style="text-align:center;padding:40px;color:#718096;">No EMI plans found.</div>';return;}
+  document.getElementById('tableArea').innerHTML=`
+    <table class="table">
+      <thead><tr><th>#</th><th>Student</th><th>Dept</th><th>Total Amt</th><th>Installments</th><th>Per Inst</th><th>Status</th><th>Requested</th><th>Actions</th></tr></thead>
+      <tbody>${data.map((e,i)=>`<tr>
+        <td>${i+1}</td>
+        <td><strong>${e.name}</strong><br><code style="font-size:11px">${e.student_id}</code></td>
+        <td>${e.department}</td>
+        <td>${fmt(e.total_amount)}</td>
+        <td>${e.installments}</td>
+        <td>${fmt(e.amount_per_installment)}</td>
+        <td>${statusBadge(e.status)}</td>
+        <td style="font-size:13px">${formatDate(e.requested_at)}</td>
+        <td>
+          ${e.status==='Pending'?`
+          <button class="btn btn-sm btn-success" onclick="act(${e.id},'Approved')">✅ Approve</button>
+          <button class="btn btn-sm btn-danger" onclick="act(${e.id},'Rejected')" style="margin-left:4px">❌ Reject</button>`
+          :'<span style="color:#718096;font-size:13px">'+e.status+'</span>'}
+        </td>
+      </tr>`).join('')}</tbody>
+    </table>`;
+}
+async function act(id,action){
+  const res=await api('/admin/emi/approve',{method:'POST',body:JSON.stringify({emi_id:id,action})});
+  toast(`EMI plan ${action}`,'success');load();
+}
+load();
+</script>
+</body></html>

@@ -1,0 +1,38 @@
+{
+  "name": "Smart Fee Collection - AI Chatbot Workflow",
+  "nodes": [
+    {
+      "parameters": { "path": "fee-chatbot", "httpMethod": "POST", "responseMode": "lastNode" },
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:5000/chatbot",
+        "method": "POST",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "student_id", "value": "={{ $json.body.student_id }}" },
+            { "name": "message", "value": "={{ $json.body.message }}" }
+          ]
+        },
+        "responseFormat": "json"
+      },
+      "name": "Query Fee Backend",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [460, 300]
+    },
+    {
+      "parameters": { "respondWith": "json", "responseBody": "={{ JSON.stringify($json) }}" },
+      "name": "Return Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [680, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": { "main": [[{ "node": "Query Fee Backend", "type": "main", "index": 0 }]] },
+    "Query Fee Backend": { "main": [[{ "node": "Return Response", "type": "main", "index": 0 }]] }
+  }
+}

@@ -59,7 +59,6 @@ body{display:flex;align-items:center;justify-content:center;min-height:100vh;bac
       Admin: Username = <code>admin</code> | Password = <code>admin@123</code>
     </div>
     <button class="btn btn-warning btn-block" style="margin-top:18px" onclick="triggerCallReminder()">📞 Call Reminder (Demo)</button>
-    </div>
   </div>
 </div>
 <div id="toast"></div>
@@ -68,18 +67,23 @@ body{display:flex;align-items:center;justify-content:center;min-height:100vh;bac
 async function triggerCallReminder() {
   const phone = prompt('Enter phone number to call (e.g. +911234567890):', '+91');
   if (!phone) return;
-  const res = await fetch('http://localhost:5001/admin/send_call_reminder', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ to_phone: phone })
-  });
-  const data = await res.json();
-  if (data.status === 'sent') {
-    toast('Call reminder sent! SID: ' + data.sid, 'success');
-  } else {
-    toast('Failed to send call: ' + (data.msg || 'Unknown error'), 'danger');
+  try {
+    const res = await fetch('/admin/send_call_reminder', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to_phone: phone })
+    });
+    const data = await res.json();
+    if (data.status === 'sent') {
+      toast('Call reminder sent! SID: ' + data.sid, 'success');
+    } else {
+      toast('Failed to send call: ' + (data.msg || 'Unknown error'), 'danger');
+    }
+  } catch (err) {
+    toast('Network error connecting to backend.', 'danger');
   }
 }
+
 let currentRole = 'student';
 function setRole(role, btn) {
   currentRole = role;
@@ -88,29 +92,52 @@ function setRole(role, btn) {
   document.getElementById('idLabel').textContent = role==='admin' ? 'Username' : 'Student ID / Email';
   document.getElementById('uid').placeholder = role==='admin' ? 'admin' : 'e.g. AIML001';
 }
+
 async function doLogin() {
   const uid = document.getElementById('uid').value.trim();
   const pwd = document.getElementById('pwd').value.trim();
   const alertBox = document.getElementById('alertBox');
   const btn = document.getElementById('loginBtn');
-  if (!uid || !pwd) { alertBox.innerHTML='<div class="alert alert-warning">Please fill all fields.</div>'; return; }
-  btn.textContent='Signing in...'; btn.disabled=true;
-  const res = await api('/login', {method:'POST', body:JSON.stringify({role:currentRole, id:uid, password:pwd})});
-  btn.textContent='Sign In →'; btn.disabled=false;
-  if (!res || res.status==='error') {
-    alertBox.innerHTML=`<div class="alert alert-danger">${res?.msg||'Login failed.'}</div>`;
-    return;
+  
+  if (!uid || !pwd) { 
+    alertBox.innerHTML='<div class="alert alert-warning">Please fill all fields.</div>'; 
+    return; 
   }
-  localStorage.setItem('role', res.role);
-  if (res.role==='student') {
-    localStorage.setItem('student_id', res.student_id);
-    localStorage.setItem('student_name', res.name);
-    window.location.href='student/pages/dashboard.html';
-  } else {
-    localStorage.setItem('admin_user', res.username);
-    window.location.href='admin/pages/dashboard.html';
+  
+  btn.textContent='Signing in...'; 
+  btn.disabled=true;
+  
+  try {
+    const res = await api('/login', {
+      method: 'POST', 
+      body: JSON.stringify({ role: currentRole, id: uid, password: pwd })
+    });
+    
+    btn.textContent='Sign In →'; 
+    btn.disabled=false;
+    
+    if (!res || res.status==='error') {
+      alertBox.innerHTML=`<div class="alert alert-danger">${res?.msg||'Login failed. Check credentials.'}</div>`;
+      return;
+    }
+    
+    localStorage.setItem('role', res.role);
+    if (res.role==='student') {
+      localStorage.setItem('student_id', res.student_id);
+      localStorage.setItem('student_name', res.name);
+      window.location.href='student/pages/dashboard.html';
+    } else {
+      localStorage.setItem('admin_user', res.username);
+      window.location.href='admin/pages/dashboard.html';
+    }
+  } catch(err) {
+    btn.textContent='Sign In →'; 
+    btn.disabled=false;
+    alertBox.innerHTML='<div class="alert alert-danger">Failed to connect to backend server.</div>';
   }
 }
+
 document.getElementById('pwd').addEventListener('keyup', e => { if(e.key==='Enter') doLogin(); });
 </script>
-</body></html>
+</body>
+</html>

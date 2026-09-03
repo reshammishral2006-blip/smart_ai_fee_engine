@@ -45,6 +45,14 @@ def db():
 def hash_pw(p): 
     return hashlib.sha256(p.encode()).hexdigest()
 
+def format_parent_phone(phone):
+    digits = ''.join(ch for ch in str(phone or '') if ch.isdigit())
+    if digits.startswith('91') and len(digits) > 10:
+        digits = digits[2:]
+    if digits.startswith('0'):
+        digits = digits[1:]
+    return '+91' + digits if digits else ''
+
 def cors(response):
     response.headers['Access-Control-Allow-Origin'] = '*'
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization'
@@ -298,7 +306,7 @@ def admin_students():
     search = request.args.get('search','')
     dept   = request.args.get('dept','')
     conn = db()
-    query = ("SELECT s.student_id, s.name, s.department, s.year, s.email, "
+    query = ("SELECT s.student_id, s.name, s.department, s.year, s.email, s.parent_phone, "
              "f.total_fee, f.paid_amount, f.pending_fee, f.due_date, f.fee_status, f.defaulter_status "
              "FROM students s JOIN fee_structure f ON s.student_id=f.student_id WHERE 1=1")
     params = []
@@ -310,7 +318,7 @@ def admin_students():
         params.append(dept)
     rows = conn.execute(query + " ORDER BY s.student_id", params).fetchall()
     conn.close()
-    return jsonify([dict(r) for r in rows])
+    return jsonify([{**dict(r), "parent_phone": format_parent_phone(r["parent_phone"])} for r in rows])
 
 @app.route('/admin/analytics')
 def admin_analytics():
@@ -334,9 +342,9 @@ def admin_analytics():
 @app.route('/admin/defaulters')
 def admin_defaulters():
     conn = db()
-    rows = conn.execute("SELECT s.student_id, s.name, s.department, s.year, s.email, f.pending_fee, f.due_date, f.defaulter_status FROM students s JOIN fee_structure f ON s.student_id=f.student_id WHERE f.defaulter_status IN ('Overdue','Pending') AND f.pending_fee > 0 ORDER BY f.pending_fee DESC").fetchall()
+    rows = conn.execute("SELECT s.student_id, s.name, s.department, s.year, s.email, s.parent_phone, f.pending_fee, f.due_date, f.defaulter_status FROM students s JOIN fee_structure f ON s.student_id=f.student_id WHERE f.defaulter_status IN ('Overdue','Pending') AND f.pending_fee > 0 ORDER BY f.pending_fee DESC").fetchall()
     conn.close()
-    return jsonify([dict(r) for r in rows])
+    return jsonify([{**dict(r), "parent_phone": format_parent_phone(r["parent_phone"])} for r in rows])
 
 @app.route('/admin/fee/edit', methods=['POST','OPTIONS'])
 def admin_edit_fee():
@@ -347,7 +355,10 @@ def admin_edit_fee():
     if fields:
         sets = ", ".join(f"{k}=?" for k in fields)
         conn.execute(f"UPDATE fee_structure SET {sets} WHERE student_id=?", list(fields.values()) + [sid])
-        conn.commit()
+    if 'parent_phone' in data:
+        conn.execute("UPDATE students SET parent_phone=? WHERE student_id=?",
+                     (format_parent_phone(data['parent_phone']), sid))
+    conn.commit()
     conn.close()
     return jsonify({"status":"updated"})
 

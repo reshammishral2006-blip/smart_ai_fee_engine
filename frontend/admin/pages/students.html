@@ -52,6 +52,7 @@
         <option>Fully Paid</option><option>Half Paid</option><option>Overdue</option>
       </select>
     </div>
+    <div class="form-group"><label class="form-label">Parent Phone</label><input class="form-control" id="editParentPhone" type="tel" placeholder="+917489171341"></div>
     <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
       <button class="btn btn-outline" onclick="hideModal('editModal')">Cancel</button>
       <button class="btn btn-primary" onclick="saveEdit()">💾 Save Changes</button>
@@ -87,6 +88,7 @@ function openEdit(s){
   document.getElementById('editPending').value=s.pending_fee;
   document.getElementById('editDue').value=s.due_date;
   document.getElementById('editStatus').value=s.fee_status;
+  document.getElementById('editParentPhone').value=s.parent_phone || '';
   showModal('editModal');
 }
 async function saveEdit(){
@@ -97,7 +99,8 @@ async function saveEdit(){
     paid_amount:+document.getElementById('editPaid').value,
     pending_fee:+document.getElementById('editPending').value,
     due_date:document.getElementById('editDue').value,
-    fee_status:document.getElementById('editStatus').value
+    fee_status:document.getElementById('editStatus').value,
+    parent_phone:document.getElementById('editParentPhone').value
   })});
   if(res){hideModal('editModal');toast('Record updated!','success');load();}
 }

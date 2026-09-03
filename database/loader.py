@@ -2,12 +2,14 @@
 Smart Fee Collection Engine — Dataset Loader
 Reads the Excel dataset, cleans it, and seeds the SQLite database.
 """
-import sqlite3, pandas as pd, os, hashlib, uuid
+import sqlite3, pandas as pd, os, hashlib, uuid, argparse
 import re
 from datetime import datetime
 
 DB_PATH   = os.path.join(os.path.dirname(__file__), "fee_engine.db")
 EXCEL_PATH = os.path.join(os.path.dirname(__file__), "smart_fee_collection_final.xlsx")
+DEFAULT_TEST_STUDENT_ID = "AIML024"
+DEFAULT_TEST_PARENT_PHONE = "+917489171341"
 
 def get_conn():
     return sqlite3.connect(DB_PATH)
@@ -59,6 +61,26 @@ def init_db():
 def hash_password(plain):
     return hashlib.sha256(plain.encode()).hexdigest()
 
+def format_parent_phone(phone):
+    digits = re.sub(r"\D", "", str(phone or ""))
+    if digits.startswith("91") and len(digits) > 10:
+        digits = digits[2:]
+    if digits.startswith("0"):
+        digits = digits[1:]
+    return "+91" + digits if digits else ""
+
+def seed_test_parent_phone(student_id=DEFAULT_TEST_STUDENT_ID, phone=DEFAULT_TEST_PARENT_PHONE):
+    conn = get_conn()
+    cursor = conn.execute(
+        "UPDATE students SET parent_phone=? WHERE student_id=?",
+        (format_parent_phone(phone), student_id)
+    )
+    conn.commit()
+    conn.close()
+    if cursor.rowcount == 0:
+        raise ValueError(f"Student not found: {student_id}")
+    print(f"[DB] Updated {student_id} parent phone to {format_parent_phone(phone)}.")
+
 def load_excel_to_db():
     # Load the first sheet regardless of its name
     df = pd.read_excel(EXCEL_PATH, sheet_name=0)
@@ -84,8 +106,11 @@ def load_excel_to_db():
         numeric_suffix = re.search(r"(\d+)$", sid)
         password_suffix = numeric_suffix.group(1).zfill(4) if numeric_suffix else sid[-4:]
         pwd = hash_password(password_suffix + "@Fee")
+        parent_phone = format_parent_phone(row.get("PARENT_PHONE", ""))
+        if sid == DEFAULT_TEST_STUDENT_ID and not parent_phone:
+            parent_phone = DEFAULT_TEST_PARENT_PHONE
         c.execute("INSERT OR REPLACE INTO students (student_id,name,department,year,email,parent_phone,password_hash) VALUES (?,?,?,?,?,?,?)",
-            (sid, row["STUDENT_NAME"], row["DEPARTMENT"], int(row["YEAR"]), email, str(row["PARENT_PHONE"]), pwd))
+            (sid, row["STUDENT_NAME"], row["DEPARTMENT"], int(row["YEAR"]), email, parent_phone, pwd))
         c.execute("INSERT OR REPLACE INTO fee_structure (student_id,total_fee,paid_amount,pending_fee,scholarship,due_date,fee_status,defaulter_status) VALUES (?,?,?,?,?,?,?,?)",
             (sid, float(row["TOTAL_FEE"]), float(row["PAID_AMOUNT"]), float(row["PENDING_FEE"]),
              float(row["SCHOLARSHIP_AMOUNT"]), row["DUE_DATE"], row["FEE_STATUS"], row["DEFAULTER_STATUS"]))
@@ -104,6 +129,14 @@ def load_excel_to_db():
     print(f"[DB] Loaded {len(df)} students.")
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--seed-test-phone", action="store_true")
+    parser.add_argument("--student-id", default=DEFAULT_TEST_STUDENT_ID)
+    parser.add_argument("--phone", default=DEFAULT_TEST_PARENT_PHONE)
+    args = parser.parse_args()
     init_db()
-    load_excel_to_db()
+    if args.seed_test_phone:
+        seed_test_parent_phone(args.student_id, args.phone)
+    else:
+        load_excel_to_db()
     print("[DB] Ready:", DB_PATH)
